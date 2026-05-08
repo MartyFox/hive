@@ -1,0 +1,8 @@
+# hive-gemini — Google Gemini CLI in a Podman sandbox
+FROM hive-base
+
+RUN npm install -g @google/gemini-cli
+
+USER agent
+
+ENTRYPOINT ["gemini"]

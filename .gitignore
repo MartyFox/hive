@@ -1,0 +1,26 @@
+# Binary
+hive
+hive-*
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency cache (not committed — go.sum is sufficient)
+vendor/
+
+# Test cache
+/tmp/
+
+# OS
+.DS_Store
+Thumbs.db

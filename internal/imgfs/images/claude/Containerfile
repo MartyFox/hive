@@ -1,0 +1,8 @@
+# hive-claude — Claude Code CLI in a Podman sandbox
+FROM hive-base
+
+RUN npm install -g @anthropic-ai/claude-code
+
+USER agent
+
+ENTRYPOINT ["claude", "--dangerously-skip-permissions"]

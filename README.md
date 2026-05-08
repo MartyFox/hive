@@ -127,8 +127,12 @@ sessions without any extra setup.
 `copilot` respects the `COPILOT_HOME` environment variable if set.
 
 If the host directory does not exist, hive warns and starts without it.
-After logging in inside the container, the CLI creates the directory
+After authenticating inside the container, the CLI creates the directory
 automatically and future sessions will mount it.
+
+**Copilot first-run auth:** the CLI prompts you to type `/login` if not
+authenticated. Follow the on-screen device-flow instructions. Credentials are
+written to `~/.copilot/` and persisted via bind mount for all future sessions.
 
 **Personal instructions** live inside these same directories — drop your
 instruction files there as normal and they are picked up automatically:
