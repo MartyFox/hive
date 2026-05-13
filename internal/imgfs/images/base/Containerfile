@@ -2,6 +2,24 @@
 # node:22-bookworm-slim provides Node LTS + npm on Debian 12
 FROM node:22-bookworm-slim
 
+# ── ca-certificates must be installed before update-ca-certificates is called ─
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Corporate / zScaler CA injection ─────────────────────────────────────────
+# hive build copies ~/.hive/extra-ca.pem into the build context as extra-ca.pem
+# (empty file when no cert exists). COPY + file-size check avoids the ARG_MAX
+# limit hit by the old base64 --build-arg approach for large cert bundles.
+COPY extra-ca.pem /tmp/extra-ca.pem
+RUN mkdir -p /usr/local/share/ca-certificates && \
+    if [ -s /tmp/extra-ca.pem ]; then \
+      cp /tmp/extra-ca.pem /usr/local/share/ca-certificates/extra-ca.crt && \
+      update-ca-certificates; \
+    else \
+      touch /usr/local/share/ca-certificates/extra-ca.crt; \
+    fi && \
+    rm -f /tmp/extra-ca.pem
+
 # ── System tools ─────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -11,14 +29,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep \
     zsh \
     bash \
-    ca-certificates \
     python3 \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Beads CLI (bd) ────────────────────────────────────────────────────────────
-RUN curl -fsSL https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh | bash \
-    || echo "[hive-base] bd install skipped (not available yet)"
+# ── GitHub CLI (gh) ─────────────────────────────────────────────────────────
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Beads CLI (bd) — optional, default off ───────────────────────────────────
+# Opt-in: set HIVE_BEADS=1 in ~/.hive/config or pass --build-arg HIVE_BEADS=1
+# when calling hive build.  Default is 0 (not installed).
+ARG HIVE_BEADS=0
+RUN if [ "$HIVE_BEADS" = "1" ]; then \
+      curl -fsSL https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh | bash; \
+    else \
+      echo "[hive-base] Beads (bd) not installed — set HIVE_BEADS=1 in ~/.hive/config to include"; \
+    fi
 
 # ── Non-root agent user ───────────────────────────────────────────────────────
 # node:22-bookworm-slim ships a 'node' user at uid/gid 1000 — rename it.

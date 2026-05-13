@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/martinf/hive/internal/podman"
@@ -12,6 +13,7 @@ import (
 )
 
 var cmdOverride string
+var promptOverride string
 
 var runCmd = &cobra.Command{
 	Use:   "run <agent>",
@@ -35,6 +37,7 @@ read-write so auth and personal instructions persist across sessions.`,
 
 func init() {
 	runCmd.Flags().StringVar(&cmdOverride, "cmd", "", "Run a one-shot command instead of interactive REPL")
+	runCmd.Flags().StringVar(&promptOverride, "prompt", "", "Pass a prompt to the agent non-interactively (copilot, claude)")
 }
 
 func runRun(_ *cobra.Command, args []string) error {
@@ -50,6 +53,12 @@ func runRun(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("creating hive network: %w", err)
 	}
 
+	// Copilot: remove any hive-generated mcp-config.json that conflicts with the
+	// built-in remote MCP transport (v1.0.44+ uses SSE, no local binary needed).
+	if agent == "copilot" {
+		podman.CleanCopilotMCPConfig()
+	}
+
 	image, err := ensureImage(agent)
 	if err != nil {
 		return fmt.Errorf("preparing image for %s: %w", agent, err)
@@ -59,16 +68,43 @@ func runRun(_ *cobra.Command, args []string) error {
 	fmt.Printf("[hive] Starting %s sandbox\n", agent)
 	fmt.Printf("[hive] Workspace → /workspace  (%s)\n", wd)
 
-	// Build podman run args (before image name)
-	runArgs := podman.BuildRunArgs(agent, cmdOverride == "")
+	// --prompt is sugar over --cmd with agent-specific prompt flag syntax.
+	if promptOverride != "" {
+		switch agent {
+		case "copilot":
+			cmdOverride = fmt.Sprintf("copilot --yolo --prompt %q", promptOverride)
+		case "claude":
+			cmdOverride = fmt.Sprintf("claude --dangerously-skip-permissions -p %q", promptOverride)
+		default:
+			return fmt.Errorf("--prompt not supported for agent %q; use --cmd", agent)
+		}
+	}
+
+	// Build podman run args (before image name).
+	// cleanupSecrets removes the temp env-file holding GH_TOKEN; call after
+	// the container exits. For syscall.Exec the cleanup cannot run — the file
+	// lingers in /tmp (0600) and is cleaned by the OS.
+	runArgs, cleanupSecrets := podman.BuildRunArgs(agent, cmdOverride == "")
 
 	if cmdOverride != "" {
+		defer cleanupSecrets()
 		// Non-interactive one-shot
 		beadsPrelude := ""
-		if _, err := os.Stat(filepath.Join(wd, ".beads")); os.IsNotExist(err) {
-			beadsPrelude = "bd init --quiet 2>/dev/null || true && "
+		if podman.BeadsEnabled() {
+			if _, err := os.Stat(filepath.Join(wd, ".beads")); os.IsNotExist(err) {
+				beadsPrelude = "bd init --quiet 2>/dev/null || true && "
+			}
 		}
-		allArgs := append(runArgs, "--entrypoint", "bash", image, "-c", beadsPrelude+cmdOverride)
+		// When a beads prelude is prepended, shell-quote the user command and
+		// run it via a nested bash -c to prevent metacharacter injection from
+		// cmdOverride into the prelude.
+		var shellCmd string
+		if beadsPrelude != "" {
+			shellCmd = beadsPrelude + "bash -c " + shellQuote(cmdOverride)
+		} else {
+			shellCmd = cmdOverride
+		}
+		allArgs := append(runArgs, "--entrypoint", "bash", image, "-c", shellCmd)
 		cmd := exec.Command("podman", allArgs...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -83,6 +119,12 @@ func runRun(_ *cobra.Command, args []string) error {
 	}
 	allArgs := append([]string{"podman"}, append(runArgs, image)...)
 	return syscall.Exec(podmanPath, allArgs, os.Environ())
+}
+
+// shellQuote wraps s in single quotes, escaping any embedded single quotes,
+// so it is safe to pass as a shell word inside a bash -c string.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // ensureImage resolves the agent image: local → pull → build.

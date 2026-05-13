@@ -2,35 +2,19 @@
 # Standalone REPL (NOT the gh extension). Docs: https://docs.github.com/en/copilot/how-tos/use-copilot-cli
 FROM hive-base
 
-# GitHub CLI (gh) — copilot CLI calls 'gh auth status' internally for auth checks
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-      | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g @github/copilot
-
-# github-mcp-server — copilot CLI's built-in default MCP config spawns this binary.
-# Fetch the latest release for the container's architecture.
-RUN set -eux; \
-    ARCH="$(uname -m)"; \
-    case "$ARCH" in \
-      x86_64)  GH_ARCH="x86_64" ;; \
-      aarch64) GH_ARCH="arm64"  ;; \
-      *)        echo "Unsupported arch: $ARCH" >&2; exit 1 ;; \
-    esac; \
-    GMCP_VERSION="1.0.3"; \
-    curl -fsSL "https://github.com/github/github-mcp-server/releases/download/v${GMCP_VERSION}/github-mcp-server_Linux_${GH_ARCH}.tar.gz" \
-      | tar -xz -C /usr/local/bin github-mcp-server; \
-    chmod +x /usr/local/bin/github-mcp-server
+RUN npm install -g @github/copilot@1.0.46
 
 USER agent
 
-# --yolo approves all tool permissions (equivalent to Claude's --dangerously-skip-permissions)
+RUN mkdir -p /home/agent/.config/gh
+
+# --yolo approves all tool permissions (equivalent to Claude's --dangerously-skip-permissions).
 # Auth: on first run copilot prompts '/login' — follow on-screen instructions.
 # Session persists via ~/.copilot/ bind mount; subsequent runs are pre-authenticated.
-ENTRYPOINT ["copilot", "--yolo"]
+# MCP: handled via built-in remote SSE transport (no local binary required).
+# Print a note if no project-level instructions file exists, then hand off.
+ENTRYPOINT ["/bin/sh", "-c", \
+  "if [ ! -f /workspace/.github/copilot-instructions.md ]; then \n\
+    printf '\\n  ℹ  No project instructions found.\\n     Run /init to create .github/copilot-instructions.md for this project.\\n     (Global ~/.copilot/copilot-instructions.md is already active.)\\n\\n'; \n\
+  fi; \n\
+  exec copilot --yolo"]

@@ -1,7 +1,7 @@
 # hive-claude — Claude Code CLI in a Podman sandbox
 FROM hive-base
 
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@2.1.140
 
 USER agent
 

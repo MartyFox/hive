@@ -24,3 +24,14 @@ vendor/
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets / credentials
+.env
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.yaml
+secrets.json
+credentials
