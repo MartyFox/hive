@@ -1,7 +1,7 @@
 # hive-codex — OpenAI Codex CLI in a Podman sandbox
 FROM hive-base
 
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex@0.130.0
 
 USER agent
 

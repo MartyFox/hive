@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/martinf/hive/internal/imgfs"
-	"github.com/martinf/hive/internal/podman"
+	"github.com/MartyFox/hive/internal/imgfs"
+	"github.com/MartyFox/hive/internal/podman"
 	"github.com/spf13/cobra"
 )
 
@@ -63,7 +63,11 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 func buildBase(ctxDir string, noCache bool) error {
 	fmt.Println("[hive] Building hive-base...")
-	return podman.BuildImage("hive-base", filepath.Join(ctxDir, "base"), noCache)
+	baseCtx := filepath.Join(ctxDir, "base")
+	if err := podman.InjectCertToContext(baseCtx); err != nil {
+		return fmt.Errorf("injecting cert into build context: %w", err)
+	}
+	return podman.BuildImage("hive-base", baseCtx, noCache, []string{podman.BeadsArg()})
 }
 
 func buildAgent(agent, ctxDir string, noCache bool) error {
@@ -73,7 +77,7 @@ func buildAgent(agent, ctxDir string, noCache bool) error {
 		}
 	}
 	fmt.Printf("[hive] Building hive-%s...\n", agent)
-	return podman.BuildImage("hive-"+agent, filepath.Join(ctxDir, agent), noCache)
+	return podman.BuildImage("hive-"+agent, filepath.Join(ctxDir, agent), noCache, nil)
 }
 
 // extractBuildContext extracts the embedded images/* tree to a temp directory.
@@ -90,7 +94,10 @@ func extractBuildContext() (dir string, cleanup func(), err error) {
 		}
 		// path is like "images/base/Containerfile"
 		// strip leading "images/" to get "base/Containerfile"
-		rel, _ := filepath.Rel("images", path)
+		rel, err := filepath.Rel("images", path)
+		if err != nil {
+			return fmt.Errorf("unexpected embedded path %s: %w", path, err)
+		}
 		dest := filepath.Join(dir, rel)
 
 		if d.IsDir() {

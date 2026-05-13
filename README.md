@@ -2,50 +2,56 @@
 
 A single Go binary that runs AI coding agents in isolated Podman containers.
 Ships Claude Code, GitHub Copilot CLI, Gemini CLI, and OpenAI Codex CLI,
-each in their own hardened container with read-write access to your project only.
+each in its own hardened container with read-write access to your project only.
 
 ## Why a binary instead of a shell script?
 
-- **Self-contained** — all Containerfiles are embedded via `//go:embed`. No separate `images/` directory needed at runtime.
-- **Portable** — `go install` or drop a single file anywhere; no bash version requirements.
-- **Auto-provision** — `hive run claude` pulls from the registry on first use. No build step required.
+- **Self-contained** — all Containerfiles are embedded via `//go:embed`.
+- **Portable** — install with `go install`, download a release binary, or build from source.
+- **Auto-provision** — `hive run <agent>` pulls a prebuilt image on first use.
 
 ## Requirements
 
-- **macOS**: [Podman Desktop](https://podman-desktop.io) (manages the Linux VM automatically)
-- **Linux**: `podman` package from your distro
+- **macOS**: [Podman Desktop](https://podman-desktop.io)
+- **Linux**: `podman` for your distro
 
-No Docker. No root. Podman runs rootless by default.
+No Docker daemon. No root. Podman runs rootless by default.
 
 ## Install
 
+### Option 1: `go install`
+
 ```bash
-go install github.com/martinf/hive@latest
+go install github.com/MartyFox/hive@latest
 ```
 
-Or build from source:
+### Option 2: build from source
 
 ```bash
-git clone https://github.com/martinf/hive
-cd hive && go build -o hive .
+git clone https://github.com/MartyFox/hive
+cd hive
+go build -o hive .
+```
+
+### Option 3: download a release binary
+
+Download the correct binary for your platform from GitHub Releases, make it executable, then place it on your `PATH`.
+
+```bash
+chmod +x hive_darwin_arm64
+mv hive_darwin_arm64 /usr/local/bin/hive
 ```
 
 ## Quick start
 
 ```bash
-# Navigate to your project
-cd ~/my-project
-
-# Run an agent — pulls image automatically on first use
 hive run claude
 hive run copilot
 hive run gemini
 hive run codex
 ```
 
-No `hive build` needed. On first run, hive pulls the pre-built image from
-`ghcr.io/martinf/hive-<agent>:latest` and tags it locally. Subsequent runs
-use the cached local image.
+`hive build` is optional. `hive run` first tries the local image cache, then pulls `ghcr.io/MartyFox/hive-<agent>:latest`, then falls back to building locally.
 
 ## Commands
 
@@ -54,97 +60,112 @@ use the cached local image.
 Run an agent REPL in the current directory.
 
 ```bash
-hive run claude               # interactive Claude Code session
-hive run copilot              # interactive Copilot CLI session
-hive run gemini               # interactive Gemini CLI session
-hive run codex                # interactive Codex CLI session
+hive run claude
+hive run copilot
+hive run gemini
+hive run codex
+```
 
+One-shot task via `--cmd`:
+
+```bash
 hive run claude --cmd "add input validation to packages/api/src/routes/auth.ts"
 ```
 
-`--cmd` runs a one-shot non-interactive task and exits. Useful for CI or
-scripted orchestration.
+Prompt shortcut via `--prompt`:
 
-**Image resolution order:**
-1. Local image `hive-<agent>` exists → use it
-2. Pull `ghcr.io/martinf/hive-<agent>:latest` → tag locally → use it
-3. Pull failed (offline / registry unavailable) → build from embedded Containerfiles
+```bash
+hive run copilot --prompt "refactor auth module to use async/await"
+hive run claude --prompt "write unit tests for src/utils/parser.ts"
+```
+
+Image resolution order:
+1. Local image `hive-<agent>` exists
+2. Pull `<registry>/hive-<agent>:latest`
+3. Pull fails, build locally from embedded Containerfiles
 
 ### `hive build [agent|base|all]`
 
-Build images locally from the Containerfiles embedded in the binary.
-Use this when you want full control, are offline, or want to customise the images.
+Build images locally from embedded Containerfiles.
 
 ```bash
-hive build            # build all (base first, then all agents)
-hive build claude     # build claude image only
-hive build base       # build the shared base image only
+hive build
+hive build claude
+hive build base
 ```
 
 ### `hive update [agent|base|all]`
 
-Rebuild without cache — forces `npm install` to fetch the latest published
-CLI versions.
+Rebuild without cache so `npm install` picks up latest published CLI versions.
 
 ```bash
-hive update           # update all images
-hive update copilot   # update copilot only
+hive update
+hive update copilot
 ```
 
 ### `hive list`
 
-Show locally available hive images with size and age.
+Show local hive images with size and age.
 
 ```bash
 hive list
 ```
 
-## Agents and YOLO mode
+### `hive version`
 
-All agents start in full-autonomy / approve-all mode so they can work
-without interactive permission prompts:
+Show binary version, commit, and build date.
 
-| Agent | Binary | Flag |
+```bash
+hive version
+```
+
+## Agents and approval mode
+
+All agents start in high-autonomy mode:
+
+| Agent | Binary | Startup flag |
 |---|---|---|
 | Claude Code | `claude` | `--dangerously-skip-permissions` |
 | GitHub Copilot CLI | `copilot` | `--yolo` |
-| Google Gemini CLI | `gemini` | *(default approve-all)* |
-| OpenAI Codex CLI | `codex` | *(default approval mode)* |
+| Google Gemini CLI | `gemini` | *(CLI default)* |
+| OpenAI Codex CLI | `codex` | *(CLI default)* |
 
 ## Global config — auth and personal instructions
 
-Each agent mounts its config directory from the host read-write into the
-container. This persists login credentials and personal instructions across
-sessions without any extra setup.
+Each agent mounts its host config directory read-write into the container. This preserves login state and personal instructions across runs.
 
-| Agent | Host path | Container path |
-|---|---|---|
-| claude | `~/.claude/` | `/home/agent/.claude/` |
-| copilot | `~/.copilot/` | `/home/agent/.copilot/` |
-| gemini | `~/.gemini/` | `/home/agent/.gemini/` |
-| codex | `~/.config/openai/` | `/home/agent/.config/openai/` |
+| Agent | Default host path | Container path | Override key |
+|---|---|---|---|
+| claude | `~/.claude/` | `/home/agent/.claude/` | `CLAUDE_HOME` |
+| copilot | `~/.copilot/` | `/home/agent/.copilot/` | `COPILOT_HOME` |
+| gemini | `~/.gemini/` | `/home/agent/.gemini/` | `GEMINI_HOME` |
+| codex | `~/.config/openai/` | `/home/agent/.config/openai/` | `CODEX_HOME` |
 
-`copilot` respects the `COPILOT_HOME` environment variable if set.
+Host paths can be overridden in `~/.hive/config`.
 
-If the host directory does not exist, hive warns and starts without it.
-After authenticating inside the container, the CLI creates the directory
-automatically and future sessions will mount it.
+If a host directory does not exist, hive warns and starts without it.
 
-**Copilot first-run auth:** the CLI prompts you to type `/login` if not
-authenticated. Follow the on-screen device-flow instructions. Credentials are
-written to `~/.copilot/` and persisted via bind mount for all future sessions.
+### Authentication
 
-**Personal instructions** live inside these same directories — drop your
-instruction files there as normal and they are picked up automatically:
+- **Claude**: prompts for login on first start
+- **Copilot**: type `/login` if not authenticated
+- **Gemini**: prompts for login on first start
+- **Codex**: prompts for API key or login on first start depending on CLI version
+
+Copilot MCP relies on Copilot CLI's built-in remote SSE MCP transport.
+
+If `gh auth token` succeeds on the host, hive reads that token and writes `GH_TOKEN` into a temporary `--env-file` for all agent containers.
+For Copilot, hive will re-use the same token to create `GITHUB_PERSONAL_ACCESS_TOKEN` as a compatibility alias for GitHub tooling that expects that variable. Tokens are not baked into images.
+
+Personal instructions live in the mounted config dirs:
 
 - Claude: `~/.claude/CLAUDE.md`
-- Copilot: `~/.copilot/` (agents/, settings.json, mcp-config.json, `*.instructions.md`)
+- Copilot: `~/.copilot/` (`agents/`, `settings.json`, `*.instructions.md`, project instructions)
 - Gemini: `~/.gemini/GEMINI.md`
 
 ## Project instructions
 
-Project-level instructions live in the workspace and are picked up
-automatically when the agent starts in `/workspace`:
+Project-level instructions live in the workspace and are picked up automatically when the agent starts in `/workspace`:
 
 | File | Read by |
 |---|---|
@@ -154,47 +175,134 @@ automatically when the agent starts in `/workspace`:
 | `.github/instructions/**/*.instructions.md` | Copilot CLI |
 | `GEMINI.md` | Gemini CLI |
 
+## Configuration
+
+hive reads `~/.hive/config` — a plain `KEY=VALUE` file. Environment variables override file values.
+
+```bash
+mkdir -p ~/.hive
+touch ~/.hive/config
+```
+
+### Supported keys
+
+| Key | Default | Description |
+|---|---|---|
+| `HIVE_NETWORK` | `hive-net` | Podman bridge network name |
+| `HIVE_REGISTRY` | `ghcr.io/MartyFox` | Registry base URL for image pulls |
+| `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
+| `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
+| `CLAUDE_HOME` | `~/.claude` | Host path mounted as Claude config |
+| `COPILOT_HOME` | `~/.copilot` | Host path mounted as Copilot config |
+| `GEMINI_HOME` | `~/.gemini` | Host path mounted as Gemini config |
+| `CODEX_HOME` | `~/.config/openai` | Host path mounted as Codex config |
+| `AGENTS_HOME` | `~/.agents` | Shared skills/agents directory mounted into all containers |
+
+### Example `~/.hive/config`
+
+```ini
+# Use a team registry instead of the default
+HIVE_REGISTRY=ghcr.io/my-org
+
+# Corporate proxy environment
+HIVE_TLS_VERIFY=false
+
+# Non-standard config locations
+CLAUDE_HOME=/Volumes/external/.claude
+
+# Enable beads auto-init before --cmd tasks
+HIVE_BEADS=1
+```
+
+## Corporate proxy / TLS interception
+
+Corporate TLS interception is optional and local-only.
+
+If you are **not** behind a corporate proxy, do nothing.
+
+If you **are** behind TLS interception:
+1. Export the proxy root certificate as PEM to `~/.hive/extra-ca.pem`
+2. Optionally set `HIVE_TLS_VERIFY=false` if Podman pull/build still fails
+3. Build images locally with `hive build`
+
+Example export on macOS:
+
+```bash
+security find-certificate -a -p /Library/Keychains/System.keychain > ~/.hive/extra-ca.pem
+```
+
+How cert handling works:
+- `extra-ca.pem` is **optional**
+- public images are built and published **without** your corporate CA
+- local corporate builds may include your CA in the locally built base image
+- at runtime, hive also bind-mounts `~/.hive/extra-ca.pem` and sets `NODE_EXTRA_CA_CERTS` when that file exists, so Node.js CLIs trust your proxy without changing published images
+
+Security guidance:
+- do **not** publish images built with your private corporate CA bundle
+- published GHCR images should be built in a clean public environment with no `extra-ca.pem`
+- use local builds for corporate environments
+
+## Images
+
+### How image resolution works
+
+```text
+hive run copilot
+  ├─ local image hive-copilot exists?         → use it
+  ├─ pull <HIVE_REGISTRY>/hive-copilot:latest → tag + use it
+  └─ pull failed                              → build locally from embedded Containerfiles
+```
+
+`hive build` is primary offline path. Registry is convenience layer for fresh machines.
+
+### Supplying custom images
+
+```bash
+podman tag my-custom-copilot:latest hive-copilot
+hive run copilot
+```
+
+Security controls are applied by `hive run`, not baked into the image.
+
 ## Security model
 
 | Control | Value |
 |---|---|
 | Linux capabilities | `--cap-drop=ALL` |
 | Privilege escalation | `--security-opt no-new-privileges` |
-| Network | Isolated bridge `hive-net`; internet allowed, host LAN isolated via Podman Machine VM boundary (macOS) |
-| Container filesystem | Ephemeral (`--rm`); only bind-mounted paths persist |
+| Network | Isolated bridge `hive-net`; internet allowed |
+| Container filesystem | Ephemeral (`--rm`) except bind mounts |
 | User inside container | `agent` (uid 1000, non-root) |
+| GitHub auth injection | Temporary `--env-file`, not image build args |
 
 ## Workspace — file access
 
-`$PWD` is bind-mounted read-write at `/workspace`. The agent writes directly
-to your project files — same inodes, no copying, changes visible instantly on
-the host. When the container exits, the filesystem is discarded; only your
-project files and the config bind mounts persist.
+`$PWD` is bind-mounted read-write at `/workspace`. Agents edit your real project files directly. Container filesystem is discarded on exit; your project and mounted config dirs persist.
 
-## Beads (bd) — issue tracking
+## Beads (`bd`) — issue tracking
 
-If the workspace has no `.beads/` directory, hive runs `bd init` before
-handing off to the agent. This gives the agent a local issue tracker from
-the first session.
+[Beads](https://github.com/gastownhall/beads/tree/main) is an optional local issue tracking tool. 
+Set `HIVE_BEADS=1` to install `bd` in the base image and auto-run `bd init` before `--cmd` tasks when `.beads/` is missing.
 
 ## Project structure
 
-```
+```text
 hiveGo/
-├── main.go                          entry point
-├── go.mod                           module github.com/martinf/hive
+├── main.go
+├── go.mod                           module github.com/MartyFox/hive
 ├── cmd/
-│   ├── root.go                      cobra root command
-│   ├── build.go                     hive build — extract embedded Containerfiles, podman build
-│   ├── run.go                       hive run  — image resolution + syscall.Exec for TTY handoff
-│   ├── update.go                    hive update — --no-cache rebuild
-│   └── list.go                      hive list  — podman images
+│   ├── root.go
+│   ├── build.go
+│   ├── run.go
+│   ├── update.go
+│   ├── list.go
+│   └── version.go
 └── internal/
-    ├── podman/podman.go             podman helpers: check, build, pull, tag, network, mount logic
+    ├── podman/podman.go
     └── imgfs/
-        ├── imgfs.go                 //go:embed images
-        └── images/                  Containerfiles baked into binary
-            ├── base/Containerfile   node:22-bookworm-slim + git/curl/jq/ripgrep/zsh/python3/bd
+        ├── imgfs.go
+        └── images/
+            ├── base/Containerfile   node:22-bookworm-slim + git/curl/jq/ripgrep/zsh/python3/gh; bd optional
             ├── claude/Containerfile @anthropic-ai/claude-code
             ├── copilot/Containerfile @github/copilot
             ├── gemini/Containerfile @google/gemini-cli
@@ -203,11 +311,7 @@ hiveGo/
 
 ## Podman Machine — macOS notes
 
-On macOS, Podman runs inside a Linux VM (Podman Machine). hive checks whether
-the machine is running and starts it automatically if not.
-
-The Podman Machine also exposes a Docker-compatible socket useful for other
-tooling (Testcontainers, CI scripts, etc.):
+On macOS, Podman runs inside a Linux VM. hive checks whether the machine is running and starts it automatically if needed.
 
 ```bash
 export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
