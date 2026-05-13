@@ -43,8 +43,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Opt-in: set HIVE_BEADS=1 in ~/.hive/config or pass --build-arg HIVE_BEADS=1
 # when calling hive build.  Default is 0 (not installed).
 ARG HIVE_BEADS=0
+ARG HIVE_BEADS_VERSION=1.0.4
 RUN if [ "$HIVE_BEADS" = "1" ]; then \
-      curl -fsSL https://raw.githubusercontent.com/gastownhall/beads/main/scripts/install.sh | bash; \
+      npm install -g @beads/bd@${HIVE_BEADS_VERSION} && bd --version; \
     else \
       echo "[hive-base] Beads (bd) not installed — set HIVE_BEADS=1 in ~/.hive/config to include"; \
     fi
