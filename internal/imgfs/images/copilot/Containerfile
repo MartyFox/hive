@@ -12,9 +12,4 @@ RUN mkdir -p /home/agent/.config/gh
 # Auth: on first run copilot prompts '/login' — follow on-screen instructions.
 # Session persists via ~/.copilot/ bind mount; subsequent runs are pre-authenticated.
 # MCP: handled via built-in remote SSE transport (no local binary required).
-# Print a note if no project-level instructions file exists, then hand off.
-ENTRYPOINT ["/bin/sh", "-c", \
-  "if [ ! -f /workspace/.github/copilot-instructions.md ]; then \n\
-    printf '\\n  ℹ  No project instructions found.\\n     Run /init to create .github/copilot-instructions.md for this project.\\n     (Global ~/.copilot/copilot-instructions.md is already active.)\\n\\n'; \n\
-  fi; \n\
-  exec copilot --yolo"]
+ENTRYPOINT ["copilot", "--yolo"]
