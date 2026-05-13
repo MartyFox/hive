@@ -6,19 +6,15 @@ FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Corporate / zScaler CA injection ─────────────────────────────────────────
-# hive build copies ~/.hive/extra-ca.pem into the build context as extra-ca.pem
-# (empty file when no cert exists). COPY + file-size check avoids the ARG_MAX
-# limit hit by the old base64 --build-arg approach for large cert bundles.
-COPY extra-ca.pem /tmp/extra-ca.pem
-RUN mkdir -p /usr/local/share/ca-certificates && \
-    if [ -s /tmp/extra-ca.pem ]; then \
-      cp /tmp/extra-ca.pem /usr/local/share/ca-certificates/extra-ca.crt && \
+# ── Corporate CA injection ─────────────────────────────────────────
+# Optional cert: if build context contains extra-ca.pem (non-empty), install it.
+# No cert file means non-corporate environment; skip cert setup entirely.
+RUN --mount=type=bind,source=.,target=/context,ro \
+    if [ -s /context/extra-ca.pem ]; then \
+      mkdir -p /usr/local/share/ca-certificates && \
+      cp /context/extra-ca.pem /usr/local/share/ca-certificates/extra-ca.crt && \
       update-ca-certificates; \
-    else \
-      touch /usr/local/share/ca-certificates/extra-ca.crt; \
-    fi && \
-    rm -f /tmp/extra-ca.pem
+    fi
 
 # ── System tools ─────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \

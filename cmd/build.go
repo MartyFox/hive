@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/martinf/hive/internal/imgfs"
-	"github.com/martinf/hive/internal/podman"
+	"github.com/MartyFox/hive/internal/imgfs"
+	"github.com/MartyFox/hive/internal/podman"
 	"github.com/spf13/cobra"
 )
 

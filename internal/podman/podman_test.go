@@ -69,7 +69,7 @@ func TestRegistryName_default(t *testing.T) {
 	t.Setenv("HIVE_REGISTRY", "")
 
 	got := RegistryName("claude")
-	want := "ghcr.io/martinf/hive-claude:latest"
+	want := "ghcr.io/MartyFox/hive-claude:latest"
 	if got != want {
 		t.Errorf("RegistryName(claude) = %q, want %q", got, want)
 	}
@@ -468,7 +468,7 @@ func TestInjectCertToContext_writesCertWhenExists(t *testing.T) {
 	}
 }
 
-func TestInjectCertToContext_writesEmptyWhenNoCert(t *testing.T) {
+func TestInjectCertToContext_noopWhenNoCert(t *testing.T) {
 	setHome(t) // temp home with no .hive/extra-ca.pem
 
 	ctxDir := t.TempDir()
@@ -476,12 +476,9 @@ func TestInjectCertToContext_writesEmptyWhenNoCert(t *testing.T) {
 		t.Fatalf("InjectCertToContext() error: %v", err)
 	}
 
-	info, err := os.Stat(filepath.Join(ctxDir, "extra-ca.pem"))
-	if err != nil {
-		t.Fatal("extra-ca.pem should exist even when no cert configured")
-	}
-	if info.Size() != 0 {
-		t.Errorf("extra-ca.pem size = %d, want 0 (empty placeholder)", info.Size())
+	_, err := os.Stat(filepath.Join(ctxDir, "extra-ca.pem"))
+	if !os.IsNotExist(err) {
+		t.Errorf("extra-ca.pem should not exist when no cert configured; err=%v", err)
 	}
 }
 

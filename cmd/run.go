@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/martinf/hive/internal/podman"
+	"github.com/MartyFox/hive/internal/podman"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ var runCmd = &cobra.Command{
 
 Image resolution order:
   1. Local image hive-<agent> exists → use it
-  2. Pull from ghcr.io/martinf/hive-<agent>:latest → tag locally → use it
+	2. Pull from ghcr.io/MartyFox/hive-<agent>:latest → tag locally → use it
   3. Pull failed → build from embedded Containerfiles → use it
 
 The current directory is mounted read-write at /workspace inside the container.

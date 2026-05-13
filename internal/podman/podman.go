@@ -14,7 +14,7 @@ import (
 const (
 	defaultNetwork  = "hive-net"
 	Prefix          = "hive"
-	defaultRegistry = "ghcr.io/martinf"
+	defaultRegistry = "ghcr.io/MartyFox"
 )
 
 // Network returns the effective Podman network name.
@@ -88,7 +88,7 @@ func ImageExists(name string) bool {
 }
 
 // tlsVerifyFlag returns "--tls-verify=false" when HIVE_TLS_VERIFY=false is set
-// via env or ~/.hive/config (useful behind TLS-intercepting proxies like zScaler).
+// via env or ~/.hive/config (useful behind TLS-intercepting proxies).
 // TLS verification is enabled by default; set HIVE_TLS_VERIFY=false to opt out.
 func tlsVerifyFlag() string {
 	if strings.ToLower(hiveConfigVal("HIVE_TLS_VERIFY")) == "false" {
@@ -187,8 +187,7 @@ func extraCACertPath() string {
 }
 
 // InjectCertToContext writes ~/.hive/extra-ca.pem into contextDir as extra-ca.pem
-// so the base Containerfile can COPY it directly. Writes an empty file when no
-// cert exists so the COPY instruction always succeeds.
+// when present. If no cert exists, this is a no-op.
 func InjectCertToContext(contextDir string) error {
 	dst := filepath.Join(contextDir, "extra-ca.pem")
 	if certPath := extraCACertPath(); certPath != "" {
@@ -199,8 +198,7 @@ func InjectCertToContext(contextDir string) error {
 		fmt.Println("[hive] Injecting ~/.hive/extra-ca.pem into build context")
 		return os.WriteFile(dst, data, 0o644)
 	}
-	// No cert — write empty placeholder; Containerfile checks by file size.
-	return os.WriteFile(dst, []byte{}, 0o644)
+	return nil
 }
 
 // BuildImage runs podman build -t tag contextDir with optional build args.
@@ -350,7 +348,7 @@ func BuildRunArgs(agent string, interactive bool) ([]string, func()) {
 	if certPath := extraCACertPath(); certPath != "" {
 		args = append(args, "-v", certPath+":/run/certs/extra-ca.pem:ro,z")
 		args = append(args, "-e", "NODE_EXTRA_CA_CERTS=/run/certs/extra-ca.pem")
-		fmt.Println("[hive] NODE_EXTRA_CA_CERTS → ~/.hive/extra-ca.pem (zScaler/corp proxy)")
+		fmt.Println("[hive] NODE_EXTRA_CA_CERTS → ~/.hive/extra-ca.pem (proxy)")
 	}
 
 	return args, cleanup

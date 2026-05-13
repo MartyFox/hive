@@ -1,4 +1,4 @@
-module github.com/martinf/hive
+module github.com/MartyFox/hive
 
 go 1.21
 

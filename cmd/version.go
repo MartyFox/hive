@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/martinf/hive/internal/version"
+	"github.com/MartyFox/hive/internal/version"
 	"github.com/spf13/cobra"
 )
 
