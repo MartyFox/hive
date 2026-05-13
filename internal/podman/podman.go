@@ -14,7 +14,7 @@ import (
 const (
 	defaultNetwork  = "hive-net"
 	Prefix          = "hive"
-	defaultRegistry = "ghcr.io/MartyFox"
+	defaultRegistry = "ghcr.io/martyfox"
 )
 
 // Network returns the effective Podman network name.
