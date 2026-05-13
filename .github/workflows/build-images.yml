@@ -33,6 +33,7 @@ jobs:
       - name: Build and push base image
         run: |
           docker build \
+            -f internal/imgfs/images/base/Containerfile \
             -t hive-base \
             -t ghcr.io/${OWNER_LC}/hive-base:latest \
             -t ghcr.io/${OWNER_LC}/hive-base:${{ github.sha }} \
