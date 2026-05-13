@@ -69,7 +69,7 @@ func TestRegistryName_default(t *testing.T) {
 	t.Setenv("HIVE_REGISTRY", "")
 
 	got := RegistryName("claude")
-	want := "ghcr.io/MartyFox/hive-claude:latest"
+	want := "ghcr.io/martyfox/hive-claude:latest"
 	if got != want {
 		t.Errorf("RegistryName(claude) = %q, want %q", got, want)
 	}

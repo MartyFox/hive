@@ -51,7 +51,7 @@ hive run gemini
 hive run codex
 ```
 
-`hive build` is optional. `hive run` first tries the local image cache, then pulls `ghcr.io/MartyFox/hive-<agent>:latest`, then falls back to building locally.
+`hive build` is optional. `hive run` first tries the local image cache, then pulls `ghcr.io/martyfox/hive-<agent>:latest`, then falls back to building locally.
 
 ## Commands
 
@@ -189,7 +189,7 @@ touch ~/.hive/config
 | Key | Default | Description |
 |---|---|---|
 | `HIVE_NETWORK` | `hive-net` | Podman bridge network name |
-| `HIVE_REGISTRY` | `ghcr.io/MartyFox` | Registry base URL for image pulls |
+| `HIVE_REGISTRY` | `ghcr.io/martyfox` | Registry base URL for image pulls |
 | `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
 | `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
 | `CLAUDE_HOME` | `~/.claude` | Host path mounted as Claude config |
@@ -289,7 +289,7 @@ Set `HIVE_BEADS=1` to install `bd` in the base image and auto-run `bd init` befo
 ```text
 hiveGo/
 ├── main.go
-├── go.mod                           module github.com/MartyFox/hive
+├── go.mod                           module github.com/martyfox/hive
 ├── cmd/
 │   ├── root.go
 │   ├── build.go
