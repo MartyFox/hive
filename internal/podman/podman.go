@@ -15,6 +15,7 @@ const (
 	defaultNetwork  = "hive-net"
 	Prefix          = "hive"
 	defaultRegistry = "ghcr.io/martyfox"
+	defaultBeadsVer = "1.0.4"
 )
 
 // Network returns the effective Podman network name.
@@ -367,6 +368,12 @@ func BeadsArg() string {
 		return "HIVE_BEADS=1"
 	}
 	return "HIVE_BEADS=0"
+}
+
+// BeadsVersionArg returns the --build-arg value for HIVE_BEADS_VERSION to pass
+// during image builds, reflecting config with a safe default.
+func BeadsVersionArg() string {
+	return "HIVE_BEADS_VERSION=" + hiveConfigValDefault("HIVE_BEADS_VERSION", defaultBeadsVer)
 }
 
 // CleanCopilotMCPConfig removes any hive-generated mcp-config.json from the
