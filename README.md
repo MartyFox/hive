@@ -79,6 +79,25 @@ hive run copilot --prompt "refactor auth module to use async/await"
 hive run claude --prompt "write unit tests for src/utils/parser.ts"
 ```
 
+Start with a specific model via `--model`:
+
+```bash
+# Interactive session on a specific model
+hive run copilot --model gpt-5.4
+hive run claude --model claude-opus-4.7
+
+# One-shot prompt on a specific model
+hive run copilot --prompt "refactor auth module" --model gpt-5.3-codex
+hive run claude --prompt "write unit tests for parser.ts" --model claude-opus-4.7
+```
+
+`--model` is supported for `claude` and `copilot` only. In one-shot `--prompt` mode,
+if the model name is not recognised, hive reruns the agent to list available models
+and prints them alongside the error. Use `--cmd` to embed `--model` directly.
+
+Interactive model preflight (validate `--model` before launching REPL) is optional
+because it adds startup latency. Enable with `HIVE_MODEL_PREFLIGHT=1`.
+
 Image resolution order:
 1. Local image `hive-<agent>` exists
 2. Pull `<registry>/hive-<agent>:latest`
@@ -193,11 +212,23 @@ touch ~/.hive/config
 | `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
 | `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
 | `HIVE_BEADS_VERSION` | `1.0.4` | Pinned `@beads/bd` version used when `HIVE_BEADS=1` |
+| `HIVE_MODEL_PREFLIGHT` | `0` | Set to `1` to preflight-check `--model` for interactive sessions |
 | `CLAUDE_HOME` | `~/.claude` | Host path mounted as Claude config |
 | `COPILOT_HOME` | `~/.copilot` | Host path mounted as Copilot config |
 | `GEMINI_HOME` | `~/.gemini` | Host path mounted as Gemini config |
 | `CODEX_HOME` | `~/.config/openai` | Host path mounted as Codex config |
 | `AGENTS_HOME` | `~/.agents` | Shared skills/agents directory mounted into all containers |
+
+hive also passes through common OpenTelemetry env vars into containers when set:
+`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
+`OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`,
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`,
+`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME`, `OTEL_LOG_LEVEL`,
+`OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`.
+
+For Copilot CLI telemetry controls, hive also passes through:
+`COPILOT_OTEL_ENABLED`, `COPILOT_OTEL_EXPORTER_TYPE`,
+`COPILOT_OTEL_FILE_EXPORTER_PATH`, `COPILOT_OTEL_SOURCE_NAME`.
 
 ### Example `~/.hive/config`
 
@@ -216,6 +247,18 @@ HIVE_BEADS=1
 
 # Pin beads version for reproducible builds
 HIVE_BEADS_VERSION=1.0.4
+
+# Optional strict preflight of --model for interactive runs (slower startup)
+HIVE_MODEL_PREFLIGHT=0
+
+# Optional OTLP exporter pass-through into containerized agent CLIs
+# Use host.containers.internal instead of localhost (networking namespace isolation).
+# Port 4318 = Aspire's OTLP/HTTP endpoint; use http/protobuf protocol for Copilot CLI.
+# See: https://github.com/github/copilot-sdk/blob/main/docs/observability/opentelemetry.md
+OTEL_EXPORTER_OTLP_ENDPOINT=http://host.containers.internal:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_SERVICE_NAME=hive-copilot
+OTEL_TRACES_EXPORTER=otlp
 ```
 
 ## Corporate proxy / TLS interception

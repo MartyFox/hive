@@ -176,6 +176,12 @@ func hiveConfigValDefault(key, fallback string) string {
 	return fallback
 }
 
+// ConfigValDefault exposes hive config resolution (env -> ~/.hive/config -> fallback)
+// for command-layer feature flags.
+func ConfigValDefault(key, fallback string) string {
+	return hiveConfigValDefault(key, fallback)
+}
+
 // extraCACertPath returns the host path of ~/.hive/extra-ca.pem if it exists,
 // or empty string (no-op path).
 func extraCACertPath() string {
@@ -350,6 +356,31 @@ func BuildRunArgs(agent string, interactive bool) ([]string, func()) {
 		args = append(args, "-v", certPath+":/run/certs/extra-ca.pem:ro,z")
 		args = append(args, "-e", "NODE_EXTRA_CA_CERTS=/run/certs/extra-ca.pem")
 		fmt.Println("[hive] NODE_EXTRA_CA_CERTS → ~/.hive/extra-ca.pem (proxy)")
+	}
+
+	// Pass through OpenTelemetry settings so in-container CLIs can emit
+	// trace/metric data and use Copilot-specific telemetry options.
+	for _, k := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_HEADERS",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+		"OTEL_RESOURCE_ATTRIBUTES",
+		"OTEL_SERVICE_NAME",
+		"OTEL_LOG_LEVEL",
+		"OTEL_TRACES_EXPORTER",
+		"OTEL_METRICS_EXPORTER",
+		"OTEL_LOGS_EXPORTER",
+		"COPILOT_OTEL_ENABLED",
+		"COPILOT_OTEL_EXPORTER_TYPE",
+		"COPILOT_OTEL_FILE_EXPORTER_PATH",
+		"COPILOT_OTEL_SOURCE_NAME",
+	} {
+		if v := hiveConfigVal(k); v != "" {
+			args = append(args, "-e", k+"="+v)
+		}
 	}
 
 	return args, cleanup

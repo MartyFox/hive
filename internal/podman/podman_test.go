@@ -588,6 +588,31 @@ func TestBuildRunArgs_noCertInjectionWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestBuildRunArgs_passesThroughOTEL(t *testing.T) {
+	setHome(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel.local:4318")
+	t.Setenv("OTEL_SERVICE_NAME", "hive-copilot")
+	t.Setenv("COPILOT_OTEL_FILE_EXPORTER_PATH", "/workspace/.copilot-otel.jsonl")
+	t.Setenv("COPILOT_OTEL_EXPORTER_TYPE", "file")
+
+	args, cleanup := BuildRunArgs("copilot", false)
+	defer cleanup()
+	joined := strings.Join(args, " ")
+
+	if !strings.Contains(joined, "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.local:4318") {
+		t.Errorf("BuildRunArgs missing OTEL endpoint pass-through: %q", joined)
+	}
+	if !strings.Contains(joined, "OTEL_SERVICE_NAME=hive-copilot") {
+		t.Errorf("BuildRunArgs missing OTEL service pass-through: %q", joined)
+	}
+	if !strings.Contains(joined, "COPILOT_OTEL_FILE_EXPORTER_PATH=/workspace/.copilot-otel.jsonl") {
+		t.Errorf("BuildRunArgs missing Copilot OTEL file exporter pass-through: %q", joined)
+	}
+	if !strings.Contains(joined, "COPILOT_OTEL_EXPORTER_TYPE=file") {
+		t.Errorf("BuildRunArgs missing Copilot OTEL exporter type pass-through: %q", joined)
+	}
+}
+
 func TestBuildRunArgs_startsWithRunRM(t *testing.T) {
 	setHome(t)
 
