@@ -67,7 +67,7 @@ func buildBase(ctxDir string, noCache bool) error {
 	if err := podman.InjectCertToContext(baseCtx); err != nil {
 		return fmt.Errorf("injecting cert into build context: %w", err)
 	}
-	return podman.BuildImage("hive-base", baseCtx, noCache, []string{podman.BeadsArg()})
+	return podman.BuildImage("hive-base", baseCtx, noCache, []string{podman.BeadsArg(), podman.BeadsVersionArg()})
 }
 
 func buildAgent(agent, ctxDir string, noCache bool) error {

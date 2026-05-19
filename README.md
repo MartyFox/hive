@@ -192,6 +192,7 @@ touch ~/.hive/config
 | `HIVE_REGISTRY` | `ghcr.io/martyfox` | Registry base URL for image pulls |
 | `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
 | `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
+| `HIVE_BEADS_VERSION` | `1.0.4` | Pinned `@beads/bd` version used when `HIVE_BEADS=1` |
 | `CLAUDE_HOME` | `~/.claude` | Host path mounted as Claude config |
 | `COPILOT_HOME` | `~/.copilot` | Host path mounted as Copilot config |
 | `GEMINI_HOME` | `~/.gemini` | Host path mounted as Gemini config |
@@ -212,6 +213,9 @@ CLAUDE_HOME=/Volumes/external/.claude
 
 # Enable beads auto-init before --cmd tasks
 HIVE_BEADS=1
+
+# Pin beads version for reproducible builds
+HIVE_BEADS_VERSION=1.0.4
 ```
 
 ## Corporate proxy / TLS interception
@@ -283,13 +287,14 @@ Security controls are applied by `hive run`, not baked into the image.
 
 [Beads](https://github.com/gastownhall/beads/tree/main) is an optional local issue tracking tool. 
 Set `HIVE_BEADS=1` to install `bd` in the base image and auto-run `bd init` before `--cmd` tasks when `.beads/` is missing.
+Set `HIVE_BEADS_VERSION` in `~/.hive/config` to pin or override the installed `@beads/bd` version.
 
 ## Project structure
 
 ```text
 hiveGo/
 ├── main.go
-├── go.mod                           module github.com/martyfox/hive
+├── go.mod                           module github.com/MartyFox/hive
 ├── cmd/
 │   ├── root.go
 │   ├── build.go

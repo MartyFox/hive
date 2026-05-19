@@ -297,6 +297,24 @@ func TestBeadsEnabled_otherValue(t *testing.T) {
 	}
 }
 
+func TestBeadsVersionArg_default(t *testing.T) {
+	setHome(t)
+	t.Setenv("HIVE_BEADS_VERSION", "")
+
+	if got := BeadsVersionArg(); got != "HIVE_BEADS_VERSION=1.0.4" {
+		t.Errorf("BeadsVersionArg() = %q, want HIVE_BEADS_VERSION=1.0.4", got)
+	}
+}
+
+func TestBeadsVersionArg_envOverride(t *testing.T) {
+	setHome(t)
+	t.Setenv("HIVE_BEADS_VERSION", "1.2.3")
+
+	if got := BeadsVersionArg(); got != "HIVE_BEADS_VERSION=1.2.3" {
+		t.Errorf("BeadsVersionArg() = %q, want HIVE_BEADS_VERSION=1.2.3", got)
+	}
+}
+
 // ── hasOtherMCPEntries ────────────────────────────────────────────────────────
 
 func TestHasOtherMCPEntries_hiveOnly(t *testing.T) {
