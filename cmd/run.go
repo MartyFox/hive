@@ -14,6 +14,17 @@ import (
 
 var cmdOverride string
 var promptOverride string
+var writableConfig bool
+var injectGHToken bool
+
+var (
+	imageExistsFunc         = podman.ImageExists
+	registryNameFunc        = podman.RegistryName
+	pullImageFunc           = podman.PullImage
+	tagImageFunc            = podman.TagImage
+	extractBuildContextFunc = extractBuildContext
+	buildAgentForRunFunc    = buildAgent
+)
 
 var runCmd = &cobra.Command{
 	Use:   "run <agent>",
@@ -27,17 +38,21 @@ Image resolution order:
 
 The current directory is mounted read-write at /workspace inside the container.
 The agent's global config directory (~/.claude/, ~/.copilot/, etc.) is mounted
-read-write so auth and personal instructions persist across sessions.`,
-	Args:    cobra.ExactArgs(1),
-	RunE:    runRun,
+read-only by default. Use --writable-config only when a login or setup flow must
+change host config. GitHub token injection is opt-in via --gh-token.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runRun,
 	Example: `  hive run claude
   hive run copilot
-  hive run claude --cmd "fix the auth bug"`,
+  hive run claude --cmd "fix the auth bug"
+  hive run copilot --gh-token --prompt "open a PR"`,
 }
 
 func init() {
 	runCmd.Flags().StringVar(&cmdOverride, "cmd", "", "Run a one-shot command instead of interactive REPL")
 	runCmd.Flags().StringVar(&promptOverride, "prompt", "", "Pass a prompt to the agent non-interactively (copilot, claude)")
+	runCmd.Flags().BoolVar(&writableConfig, "writable-config", false, "Mount host agent config read-write instead of read-only")
+	runCmd.Flags().BoolVar(&injectGHToken, "gh-token", false, "Inject host gh auth token into the container")
 }
 
 func runRun(_ *cobra.Command, args []string) error {
@@ -45,80 +60,117 @@ func runRun(_ *cobra.Command, args []string) error {
 	if !podman.ValidAgent(agent) {
 		return fmt.Errorf("unknown agent %q — valid:%s", agent, joinAgents())
 	}
+	if err := setupAgentRun(agent); err != nil {
+		return err
+	}
+	image, wd, err := prepareRun(agent)
+	if err != nil {
+		return err
+	}
+	opts := runOptions()
+	if promptOverride != "" {
+		return executePromptRun(agent, image, opts)
+	}
+	runArgs, cleanupSecrets, err := podman.BuildRunArgs(agent, opts)
+	if err != nil {
+		return err
+	}
+	if cmdOverride != "" {
+		return executeCommandRun(runArgs, cleanupSecrets, image, wd)
+	}
+	if injectGHToken || podman.GitHubTokenEnabled() {
+		return runPodmanChild(append(runArgs, image), cleanupSecrets)
+	}
+	return execPodman(runArgs, image)
+}
 
+func runOptions() podman.RunOptions {
+	return podman.RunOptions{
+		Interactive:    cmdOverride == "" && promptOverride == "",
+		WritableConfig: writableConfig,
+		GitHubToken:    injectGHToken,
+	}
+}
+
+func setupAgentRun(agent string) error {
 	if err := podman.CheckPodman(); err != nil {
 		return err
 	}
 	if err := podman.EnsureNetwork(); err != nil {
 		return fmt.Errorf("creating hive network: %w", err)
 	}
-
-	// Copilot: remove any hive-generated mcp-config.json that conflicts with the
-	// built-in remote MCP transport (v1.0.44+ uses SSE, no local binary needed).
 	if agent == "copilot" {
 		podman.CleanCopilotMCPConfig()
 	}
+	return nil
+}
 
+func prepareRun(agent string) (string, string, error) {
 	image, err := ensureImage(agent)
 	if err != nil {
-		return fmt.Errorf("preparing image for %s: %w", agent, err)
+		return "", "", fmt.Errorf("preparing image for %s: %w", agent, err)
 	}
-
 	wd, _ := os.Getwd()
 	fmt.Printf("[hive] Starting %s sandbox\n", agent)
 	fmt.Printf("[hive] Workspace → /workspace  (%s)\n", wd)
+	return image, wd, nil
+}
 
-	// --prompt is sugar over --cmd with agent-specific prompt flag syntax.
-	if promptOverride != "" {
-		switch agent {
-		case "copilot":
-			cmdOverride = fmt.Sprintf("copilot --yolo --prompt %q", promptOverride)
-		case "claude":
-			cmdOverride = fmt.Sprintf("claude --dangerously-skip-permissions -p %q", promptOverride)
-		default:
-			return fmt.Errorf("--prompt not supported for agent %q; use --cmd", agent)
-		}
+func executePromptRun(agent, image string, opts podman.RunOptions) error {
+	entrypoint, promptArgs, ok := promptEntrypointArgs(agent, promptOverride)
+	if !ok {
+		return fmt.Errorf("--prompt not supported for agent %q; use --cmd", agent)
 	}
-
-	// Build podman run args (before image name).
-	// cleanupSecrets removes the temp env-file holding GH_TOKEN; call after
-	// the container exits. For syscall.Exec the cleanup cannot run — the file
-	// lingers in /tmp (0600) and is cleaned by the OS.
-	runArgs, cleanupSecrets := podman.BuildRunArgs(agent, cmdOverride == "")
-
-	if cmdOverride != "" {
-		defer cleanupSecrets()
-		// Non-interactive one-shot
-		beadsPrelude := ""
-		if podman.BeadsEnabled() {
-			if _, err := os.Stat(filepath.Join(wd, ".beads")); os.IsNotExist(err) {
-				beadsPrelude = "bd init --quiet 2>/dev/null || true && "
-			}
-		}
-		// When a beads prelude is prepended, shell-quote the user command and
-		// run it via a nested bash -c to prevent metacharacter injection from
-		// cmdOverride into the prelude.
-		var shellCmd string
-		if beadsPrelude != "" {
-			shellCmd = beadsPrelude + "bash -c " + shellQuote(cmdOverride)
-		} else {
-			shellCmd = cmdOverride
-		}
-		allArgs := append(runArgs, "--entrypoint", "bash", image, "-c", shellCmd)
-		cmd := exec.Command("podman", allArgs...)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+	runArgs, cleanupSecrets, err := podman.BuildRunArgs(agent, opts)
+	if err != nil {
+		return err
 	}
+	allArgs := append(runArgs, "--entrypoint", entrypoint, image)
+	return runPodmanChild(append(allArgs, promptArgs...), cleanupSecrets)
+}
 
-	// Interactive: replace this process with podman (proper TTY handoff)
+func executeCommandRun(runArgs []string, cleanupSecrets func(), image, wd string) error {
+	allArgs := append(runArgs, "--entrypoint", "bash", image, "-c", commandShell(wd))
+	return runPodmanChild(allArgs, cleanupSecrets)
+}
+
+func commandShell(wd string) string {
+	if !podman.BeadsEnabled() {
+		return cmdOverride
+	}
+	if _, err := os.Stat(filepath.Join(wd, ".beads")); !os.IsNotExist(err) {
+		return cmdOverride
+	}
+	return "bd init --quiet 2>/dev/null || true && bash -c " + shellQuote(cmdOverride)
+}
+
+func runPodmanChild(args []string, cleanup func()) error {
+	defer cleanup()
+	cmd := exec.Command("podman", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func execPodman(runArgs []string, image string) error {
 	podmanPath, err := exec.LookPath("podman")
 	if err != nil {
 		return fmt.Errorf("podman not found: %w", err)
 	}
 	allArgs := append([]string{"podman"}, append(runArgs, image)...)
 	return syscall.Exec(podmanPath, allArgs, os.Environ())
+}
+
+func promptEntrypointArgs(agent, prompt string) (string, []string, bool) {
+	switch agent {
+	case "copilot":
+		return "copilot", []string{"--yolo", "--prompt", prompt}, true
+	case "claude":
+		return "claude", []string{"--dangerously-skip-permissions", "-p", prompt}, true
+	default:
+		return "", nil, false
+	}
 }
 
 // shellQuote wraps s in single quotes, escaping any embedded single quotes,
@@ -130,16 +182,16 @@ func shellQuote(s string) string {
 // ensureImage resolves the agent image: local → pull → build.
 func ensureImage(agent string) (string, error) {
 	local := "hive-" + agent
-	if podman.ImageExists(local) {
+	if imageExistsFunc(local) {
 		return local, nil
 	}
 
 	// Try registry pull
-	reg := podman.RegistryName(agent)
+	reg := registryNameFunc(agent)
 	fmt.Printf("[hive] Image %s not found — pulling %s...\n", local, reg)
-	if err := podman.PullImage(reg); err == nil {
+	if err := pullImageFunc(reg); err == nil {
 		fmt.Printf("[hive] Tagging %s → %s\n", reg, local)
-		if err := podman.TagImage(reg, local); err != nil {
+		if err := tagImageFunc(reg, local); err != nil {
 			return "", fmt.Errorf("tagging pulled image: %w", err)
 		}
 		return local, nil
@@ -147,13 +199,13 @@ func ensureImage(agent string) (string, error) {
 
 	// Fallback: build from embedded
 	fmt.Printf("[hive] Pull failed — building from embedded Containerfiles...\n")
-	ctxDir, cleanup, err := extractBuildContext()
+	ctxDir, cleanup, err := extractBuildContextFunc()
 	if err != nil {
 		return "", fmt.Errorf("extracting embedded Containerfiles: %w", err)
 	}
 	defer cleanup()
 
-	if err := buildAgent(agent, ctxDir, false); err != nil {
+	if err := buildAgentForRunFunc(agent, ctxDir, false); err != nil {
 		return "", fmt.Errorf("building hive-%s: %w", agent, err)
 	}
 	return local, nil

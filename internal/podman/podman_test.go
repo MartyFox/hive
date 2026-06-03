@@ -15,6 +15,8 @@ func setHome(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	t.Setenv("HIVE_AGENT_CONFIG_MODE", "")
+	t.Setenv("HIVE_GH_TOKEN_MODE", "")
 	return dir
 }
 
@@ -28,6 +30,64 @@ func writeHiveConfig(t *testing.T, home, content string) {
 	if err := os.WriteFile(filepath.Join(dir, "config"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// writeHiveYAMLConfig writes content to <home>/.hive/config.yaml.
+func writeHiveYAMLConfig(t *testing.T, home, content string) {
+	t.Helper()
+	dir := filepath.Join(home, ".hive")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func prependFakeGH(t *testing.T, token string) {
+	t.Helper()
+	binDir := t.TempDir()
+	ghPath := filepath.Join(binDir, "gh")
+	script := "#!/bin/sh\nif [ \"$1\" = auth ] && [ \"$2\" = token ]; then\n  printf '%s\\n' \"$HIVE_FAKE_GH_TOKEN\"\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HIVE_FAKE_GH_TOKEN", token)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func prependFakePodmanSecret(t *testing.T) string {
+	t.Helper()
+	binDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "podman.log")
+	podmanPath := filepath.Join(binDir, "podman")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$HIVE_FAKE_PODMAN_LOG"
+if [ "$1" = secret ] && [ "$2" = create ]; then
+  input="$(cat)"
+  printf 'stdin:%s\n' "$input" >> "$HIVE_FAKE_PODMAN_LOG"
+  exit 0
+fi
+if [ "$1" = secret ] && [ "$2" = rm ]; then
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(podmanPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HIVE_FAKE_PODMAN_LOG", logPath)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return logPath
+}
+
+func argAfter(args []string, key string) string {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == key {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 // ── ValidAgent ────────────────────────────────────────────────────────────────
@@ -86,6 +146,17 @@ func TestRegistryName_envOverride(t *testing.T) {
 	}
 }
 
+func TestRegistryName_yamlFallback(t *testing.T) {
+	home := setHome(t)
+	writeHiveYAMLConfig(t, home, "registry: ghcr.io/team\n")
+
+	got := RegistryName("copilot")
+	want := "ghcr.io/team/hive-copilot:latest"
+	if got != want {
+		t.Errorf("RegistryName(copilot) = %q, want %q", got, want)
+	}
+}
+
 // ── Network ───────────────────────────────────────────────────────────────────
 
 func TestNetwork_default(t *testing.T) {
@@ -103,6 +174,16 @@ func TestNetwork_envOverride(t *testing.T) {
 
 	if got := Network(); got != "custom-net" {
 		t.Errorf("Network() = %q, want custom-net", got)
+	}
+}
+
+func TestNetwork_envWinsOverYAML(t *testing.T) {
+	home := setHome(t)
+	writeHiveYAMLConfig(t, home, "network: yaml-net\n")
+	t.Setenv("HIVE_NETWORK", "env-net")
+
+	if got := Network(); got != "env-net" {
+		t.Errorf("Network() = %q, want env-net", got)
 	}
 }
 
@@ -216,7 +297,7 @@ func TestHiveConfigValDefault_usesDefault(t *testing.T) {
 	setHome(t)
 	t.Setenv("NO_SUCH_KEY", "")
 
-	if got := hiveConfigValDefault("NO_SUCH_KEY", "mydefault"); got != "mydefault" {
+	if got := hiveConfigValDefault("NO_SUCH_KEY", "", "mydefault"); got != "mydefault" {
 		t.Errorf("hiveConfigValDefault: got %q, want mydefault", got)
 	}
 }
@@ -225,8 +306,16 @@ func TestHiveConfigValDefault_envOverridesDefault(t *testing.T) {
 	setHome(t)
 	t.Setenv("MY_KEY", "envval")
 
-	if got := hiveConfigValDefault("MY_KEY", "default"); got != "envval" {
+	if got := hiveConfigValDefault("MY_KEY", "", "default"); got != "envval" {
 		t.Errorf("hiveConfigValDefault: got %q, want envval", got)
+	}
+}
+
+func TestHiveConfigValDefault_usesYAMLValue(t *testing.T) {
+	setHome(t)
+
+	if got := hiveConfigValDefault("MY_KEY", "fromyaml", "default"); got != "fromyaml" {
+		t.Errorf("hiveConfigValDefault: got %q, want fromyaml", got)
 	}
 }
 
@@ -265,6 +354,15 @@ func TestTlsVerifyFlag_true(t *testing.T) {
 
 	if got := tlsVerifyFlag(); got != "" {
 		t.Errorf("tlsVerifyFlag() true = %q, want empty", got)
+	}
+}
+
+func TestTlsVerifyFlag_yamlFalse(t *testing.T) {
+	home := setHome(t)
+	writeHiveYAMLConfig(t, home, "tlsVerify: false\n")
+
+	if got := tlsVerifyFlag(); got != "--tls-verify=false" {
+		t.Errorf("tlsVerifyFlag() yaml false = %q, want --tls-verify=false", got)
 	}
 }
 
@@ -502,11 +600,20 @@ func TestInjectCertToContext_noopWhenNoCert(t *testing.T) {
 
 // ── BuildRunArgs ──────────────────────────────────────────────────────────────
 
+func buildRunArgsForTest(t *testing.T, agent string, opts RunOptions) ([]string, func()) {
+	t.Helper()
+	args, cleanup, err := BuildRunArgs(agent, opts)
+	if err != nil {
+		t.Fatalf("BuildRunArgs() error: %v", err)
+	}
+	return args, cleanup
+}
+
 func TestBuildRunArgs_alwaysHasSecurityFlags(t *testing.T) {
 	setHome(t)
 	t.Setenv("HIVE_NETWORK", "test-net")
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	joined := strings.Join(args, " ")
 
@@ -520,7 +627,7 @@ func TestBuildRunArgs_alwaysHasSecurityFlags(t *testing.T) {
 func TestBuildRunArgs_interactiveAddsIT(t *testing.T) {
 	setHome(t)
 
-	args, cleanup := BuildRunArgs("claude", true)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{Interactive: true})
 	defer cleanup()
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "-it") {
@@ -531,7 +638,7 @@ func TestBuildRunArgs_interactiveAddsIT(t *testing.T) {
 func TestBuildRunArgs_nonInteractiveNoIT(t *testing.T) {
 	setHome(t)
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	for _, a := range args {
 		if a == "-it" {
@@ -543,7 +650,7 @@ func TestBuildRunArgs_nonInteractiveNoIT(t *testing.T) {
 func TestBuildRunArgs_workspaceMount(t *testing.T) {
 	setHome(t)
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "/workspace") {
@@ -551,6 +658,205 @@ func TestBuildRunArgs_workspaceMount(t *testing.T) {
 	}
 	if !strings.Contains(joined, "--workdir /workspace") {
 		t.Errorf("BuildRunArgs missing --workdir /workspace in %q", joined)
+	}
+}
+
+func TestBuildRunArgs_configMountsDefaultReadOnly(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".agents"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+
+	for _, want := range []string{
+		filepath.Join(home, ".claude") + ":/home/agent/.claude:ro,z",
+		filepath.Join(home, ".agents") + ":/home/agent/.agents:ro,z",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("BuildRunArgs missing read-only config mount %q in %q", want, joined)
+		}
+	}
+}
+
+func TestBuildRunArgs_writableConfigFlagMountsConfigReadWrite(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{WritableConfig: true})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+	want := filepath.Join(home, ".claude") + ":/home/agent/.claude:rw,z"
+	if !strings.Contains(joined, want) {
+		t.Errorf("BuildRunArgs missing read-write config mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_writableConfigFromYAML(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeHiveYAMLConfig(t, home, "agentConfig:\n  mode: writable\n")
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+	want := filepath.Join(home, ".claude") + ":/home/agent/.claude:rw,z"
+	if !strings.Contains(joined, want) {
+		t.Errorf("BuildRunArgs missing read-write config mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_configPathFromYAML(t *testing.T) {
+	home := setHome(t)
+	custom := filepath.Join(home, "agent-configs", "claude")
+	if err := os.MkdirAll(custom, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeHiveYAMLConfig(t, home, "agentConfig:\n  paths:\n    claude: "+custom+"\n")
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+	want := custom + ":/home/agent/.claude:ro,z"
+	if !strings.Contains(joined, want) {
+		t.Errorf("BuildRunArgs missing YAML config mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_rejectsDangerousConfigHome(t *testing.T) {
+	home := setHome(t)
+	t.Setenv("CLAUDE_HOME", home)
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs() should reject home directory as config home")
+	}
+	if !strings.Contains(err.Error(), "too broad") {
+		t.Fatalf("BuildRunArgs() error = %v, want too broad", err)
+	}
+}
+
+func TestBuildRunArgs_rejectsSensitiveConfigHome(t *testing.T) {
+	for _, parts := range [][]string{{".ssh"}, {".gnupg"}, {".aws"}, {".config", "gcloud"}, {".kube"}} {
+		t.Run(filepath.Join(parts...), func(t *testing.T) {
+			home := setHome(t)
+			path := filepath.Join(append([]string{home}, parts...)...)
+			if err := os.MkdirAll(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("CLAUDE_HOME", path)
+
+			_, _, err := BuildRunArgs("claude", RunOptions{})
+			if err == nil {
+				t.Fatal("BuildRunArgs() should reject sensitive config home")
+			}
+			if !strings.Contains(err.Error(), "sensitive host config") {
+				t.Fatalf("BuildRunArgs() error = %v, want sensitive host config", err)
+			}
+		})
+	}
+}
+
+func TestBuildRunArgs_stateMountReadWrite(t *testing.T) {
+	home := setHome(t)
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+
+	statePath := filepath.Join(home, ".hive", "state", "claude")
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("state dir should exist: %v", err)
+	}
+	want := statePath + ":/home/agent/.hive-state:rw,z"
+	if !strings.Contains(joined, want) {
+		t.Errorf("BuildRunArgs missing state mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_extraMountFromYAML(t *testing.T) {
+	home := setHome(t)
+	docs := filepath.Join(home, "docs")
+	if err := os.MkdirAll(docs, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeHiveYAMLConfig(t, home, "mounts:\n  - name: docs\n    host: "+docs+"\n    container: /mnt/docs\n    mode: read-only\n")
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+	want := docs + ":/mnt/docs:ro,z"
+	if !strings.Contains(joined, want) {
+		t.Errorf("BuildRunArgs missing extra mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_rejectsDangerousExtraMountHost(t *testing.T) {
+	home := setHome(t)
+	writeHiveYAMLConfig(t, home, "mounts:\n  - name: home\n    host: ~/\n    container: /mnt/home\n    mode: read-only\n")
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs() should reject home extra mount")
+	}
+	if !strings.Contains(err.Error(), "too broad") {
+		t.Fatalf("BuildRunArgs() error = %v, want too broad", err)
+	}
+}
+
+func TestBuildRunArgs_rejectsSensitiveExtraMountParent(t *testing.T) {
+	home := setHome(t)
+	writeHiveYAMLConfig(t, home, "mounts:\n  - name: config\n    host: ~/.config\n    container: /mnt/config\n    mode: read-only\n")
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs() should reject sensitive parent extra mount")
+	}
+	if !strings.Contains(err.Error(), "sensitive host config") {
+		t.Fatalf("BuildRunArgs() error = %v, want sensitive host config", err)
+	}
+}
+
+func TestBuildRunArgs_rejectsInvalidExtraMountContainer(t *testing.T) {
+	home := setHome(t)
+	docs := filepath.Join(home, "docs")
+	if err := os.MkdirAll(docs, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeHiveYAMLConfig(t, home, "mounts:\n  - name: docs\n    host: "+docs+"\n    container: /workspace/docs\n    mode: read-only\n")
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs() should reject non-/mnt extra mount")
+	}
+	if !strings.Contains(err.Error(), "under /mnt") {
+		t.Fatalf("BuildRunArgs() error = %v, want under /mnt", err)
+	}
+}
+
+func TestBuildRunArgs_rejectsBareMntExtraMountContainer(t *testing.T) {
+	home := setHome(t)
+	docs := filepath.Join(home, "docs")
+	if err := os.MkdirAll(docs, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeHiveYAMLConfig(t, home, "mounts:\n  - name: docs\n    host: "+docs+"\n    container: /mnt\n    mode: read-only\n")
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs() should reject bare /mnt extra mount")
+	}
+	if !strings.Contains(err.Error(), "under /mnt") {
+		t.Fatalf("BuildRunArgs() error = %v, want under /mnt", err)
 	}
 }
 
@@ -564,7 +870,7 @@ func TestBuildRunArgs_certInjectedWhenExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	joined := strings.Join(args, " ")
 
@@ -579,7 +885,7 @@ func TestBuildRunArgs_certInjectedWhenExists(t *testing.T) {
 func TestBuildRunArgs_noCertInjectionWhenAbsent(t *testing.T) {
 	setHome(t) // temp home, no extra-ca.pem
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	for _, a := range args {
 		if strings.Contains(a, "NODE_EXTRA_CA_CERTS") {
@@ -591,24 +897,152 @@ func TestBuildRunArgs_noCertInjectionWhenAbsent(t *testing.T) {
 func TestBuildRunArgs_startsWithRunRM(t *testing.T) {
 	setHome(t)
 
-	args, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	if len(args) < 2 || args[0] != "run" || args[1] != "--rm" {
 		t.Errorf("BuildRunArgs should start with 'run --rm', got %v", args[:2])
 	}
 }
 
-func TestBuildRunArgs_secretEnvFileCreated(t *testing.T) {
-	// When gh auth token is available, --env-file should be passed with a
-	// temp file that is cleaned up by the returned func.
-	// We can't guarantee gh is available in CI, so we just verify the
-	// cleanup func is safe to call (no panic) even when no token exists.
+func TestBuildRunArgs_defaultDoesNotInjectGitHubToken(t *testing.T) {
 	setHome(t)
 
-	_, cleanup := BuildRunArgs("claude", false)
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
+	defer cleanup()
+	for _, a := range args {
+		if a == "--env-file" || a == "--secret" {
+			t.Error("BuildRunArgs should not inject GitHub token by default")
+		}
+	}
+}
+
+func TestBuildRunArgs_secretCleanupIsIdempotent(t *testing.T) {
+	// We can't guarantee gh is available in CI, so verify cleanup is safe
+	// even when token injection is requested but no token exists.
+	setHome(t)
+
+	_, cleanup := buildRunArgsForTest(t, "claude", RunOptions{GitHubToken: true})
 	// Must not panic
 	cleanup()
 	cleanup() // idempotent — second call also must not panic
+}
+
+func TestBuildRunArgs_rejectsUnknownGitHubTokenMode(t *testing.T) {
+	setHome(t)
+	t.Setenv("HIVE_GH_TOKEN_MODE", "ambient")
+
+	_, _, err := BuildRunArgs("claude", RunOptions{})
+	if err == nil {
+		t.Fatal("BuildRunArgs should reject unknown GitHub token mode")
+	}
+	if !strings.Contains(err.Error(), `unsupported GitHub token mode "ambient"`) {
+		t.Fatalf("BuildRunArgs error = %v, want unsupported token mode", err)
+	}
+}
+
+func TestBuildRunArgs_githubTokenPodmanSecretForClaude(t *testing.T) {
+	setHome(t)
+	prependFakeGH(t, "secret-token")
+	logPath := prependFakePodmanSecret(t)
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{GitHubToken: true})
+	secret := argAfter(args, "--secret")
+	if secret == "" {
+		t.Fatal("BuildRunArgs should add --secret when --gh-token uses default mode")
+	}
+	if !strings.Contains(secret, ",type=env,target=GH_TOKEN") {
+		t.Fatalf("secret arg = %q, want GH_TOKEN env target", secret)
+	}
+	if argAfter(args, "--env-file") != "" {
+		t.Fatal("podman-secret mode should not create --env-file")
+	}
+
+	cleanup()
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(data)
+	if !strings.Contains(log, "secret create hive-gh-token-") {
+		t.Fatalf("fake podman log missing secret create: %q", log)
+	}
+	if !strings.Contains(log, "stdin:secret-token") {
+		t.Fatalf("fake podman log missing token on stdin: %q", log)
+	}
+	if !strings.Contains(log, "secret rm hive-gh-token-") {
+		t.Fatalf("cleanup should remove podman secret, log: %q", log)
+	}
+}
+
+func TestBuildRunArgs_githubTokenPodmanSecretForCopilot(t *testing.T) {
+	setHome(t)
+	prependFakeGH(t, "copilot-secret")
+	logPath := prependFakePodmanSecret(t)
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{GitHubToken: true})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, ",type=env,target=GH_TOKEN") {
+		t.Fatalf("args missing GH_TOKEN secret target: %q", joined)
+	}
+	if !strings.Contains(joined, ",type=env,target=GITHUB_PERSONAL_ACCESS_TOKEN") {
+		t.Fatalf("args missing Copilot token alias secret target: %q", joined)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(data), "secret create hive-gh-token-"); got != 2 {
+		t.Fatalf("podman secret create count = %d, want 2; log=%q", got, string(data))
+	}
+}
+
+func TestBuildRunArgs_githubTokenEnvFileForClaude(t *testing.T) {
+	setHome(t)
+	t.Setenv("HIVE_GH_TOKEN_MODE", "env-file")
+	prependFakeGH(t, "test-token")
+
+	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{GitHubToken: true})
+	envFile := argAfter(args, "--env-file")
+	if envFile == "" {
+		t.Fatal("BuildRunArgs should add --env-file when gh token exists")
+	}
+
+	data, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), "GH_TOKEN=test-token\n"; got != want {
+		t.Fatalf("env file = %q, want %q", got, want)
+	}
+
+	cleanup()
+	if _, err := os.Stat(envFile); !os.IsNotExist(err) {
+		t.Fatalf("cleanup should remove env file, stat err=%v", err)
+	}
+}
+
+func TestBuildRunArgs_githubTokenEnvFileForCopilot(t *testing.T) {
+	setHome(t)
+	t.Setenv("HIVE_GH_TOKEN_MODE", "env-file")
+	prependFakeGH(t, "copilot-token")
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{GitHubToken: true})
+	defer cleanup()
+	envFile := argAfter(args, "--env-file")
+	if envFile == "" {
+		t.Fatal("BuildRunArgs should add --env-file when gh token exists")
+	}
+
+	data, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "GH_TOKEN=copilot-token\nGITHUB_PERSONAL_ACCESS_TOKEN=copilot-token\n"
+	if got := string(data); got != want {
+		t.Fatalf("env file = %q, want %q", got, want)
+	}
 }
 
 // ── JoinAgents ────────────────────────────────────────────────────────────────

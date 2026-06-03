@@ -1,6 +1,10 @@
 # hive-codex — OpenAI Codex CLI in a Podman sandbox
 FROM hive-base
 
+LABEL org.opencontainers.image.source="https://github.com/MartyFox/hive" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.description="Hive OpenAI Codex agent image"
+
 RUN npm install -g @openai/codex@0.130.0
 
 USER agent

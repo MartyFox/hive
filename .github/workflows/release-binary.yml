@@ -73,6 +73,9 @@ jobs:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -87,3 +90,6 @@ jobs:
           generate_release_notes: true
           files: |
             dist/**/hive_*
+            LICENSE
+            NOTICE
+            THIRD_PARTY_NOTICES.md

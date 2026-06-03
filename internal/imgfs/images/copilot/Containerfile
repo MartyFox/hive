@@ -2,6 +2,10 @@
 # Standalone REPL (NOT the gh extension). Docs: https://docs.github.com/en/copilot/how-tos/use-copilot-cli
 FROM hive-base
 
+LABEL org.opencontainers.image.source="https://github.com/MartyFox/hive" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.description="Hive GitHub Copilot agent image"
+
 RUN npm install -g @github/copilot@1.0.46
 
 USER agent
