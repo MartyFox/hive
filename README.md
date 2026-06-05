@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="https://github.com/MartyFox/hive/docs/brand/logo-lockup-light.svg" alt="hive — Host Isolated Virtual Environment" width="720"/>
+  <img src="/MartyFox/hive/raw/main/docs/brand/logo-lockup-light.png" alt="hive - Host Isolated Virtual Environment" width="720"/>
 </p>
 
 <p align="center">
   <a href="https://github.com/MartyFox/hive/actions/workflows/build-images.yml"><img src="https://github.com/MartyFox/hive/actions/workflows/build-images.yml/badge.svg" alt="Build images"></a>
   <a href="https://github.com/MartyFox/hive/actions/workflows/release-binary.yml"><img src="https://github.com/MartyFox/hive/actions/workflows/release-binary.yml/badge.svg" alt="Release"></a>
-  <a href="https://github.com/MartyFox/hive/releases/latest"><img src="https://img.shields.io/github/v/release/MartyFox/hive" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/go-1.21+-00ADD8?logo=go&logoColor=white" alt="Go 1.21+">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
+  <!-- <a href="https://github.com/MartyFox/hive/releases/latest"><img src="https://img.shields.io/github/v/release/MartyFox/hive" alt="Latest release"></a> -->
+  <!-- <img src="https://img.shields.io/badge/go-1.21+-00ADD8?logo=go&logoColor=white" alt="Go 1.21+"> -->
+  <!-- <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a> -->
 </p>
 
 <p align="center">
