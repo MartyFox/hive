@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/hive-lockup-light_v2.svg" alt="hive — Host Isolated Virtual Environment" width="720"/>
+  <img src="https://github.com/MartyFox/hive/docs/brand/hive-lockup-light_v2.svg" alt="hive — Host Isolated Virtual Environment" width="720"/>
 </p>
 
 <p align="center">
@@ -20,30 +20,37 @@ each in its own hardened container with read-write access to your project worksp
 
 ## Table of Contents
 
-- [Why a binary?](#why-a-binary-instead-of-a-shell-script)
+- [Table of Contents](#table-of-contents)
+- [Why a binary instead of a shell script?](#why-a-binary-instead-of-a-shell-script)
 - [Requirements](#requirements)
 - [Install](#install)
+  - [Option 1: `go install`](#option-1-go-install)
+  - [Option 2: build from source](#option-2-build-from-source)
+  - [Option 3: download a release binary](#option-3-download-a-release-binary)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
-  - [`hive run`](#hive-run-agent)
-  - [`hive build`](#hive-build-agentbaseall)
-  - [`hive update`](#hive-update-agentbaseall)
+  - [`hive run <agent>`](#hive-run-agent)
+  - [`hive build [agent|base|all]`](#hive-build-agentbaseall)
+  - [`hive update [agent|base|all]`](#hive-update-agentbaseall)
   - [`hive list`](#hive-list)
   - [`hive version`](#hive-version)
 - [Agents and Approval Mode](#agents-and-approval-mode)
 - [Global Config — Auth and Personal Instructions](#global-config--auth-and-personal-instructions)
+  - [Authentication](#authentication)
 - [Project Instructions](#project-instructions)
 - [Configuration](#configuration)
-  - [config.yaml](#example-hiveconfigyaml)
-  - [Supported keys](#supported-keys)
-  - [Legacy config](#example-legacy-hiveconfig)
+  - [Example `~/.hive/config.yaml`](#example-hiveconfigyaml)
+  - [Supported Keys](#supported-keys)
+  - [Example Legacy `~/.hive/config`](#example-legacy-hiveconfig)
 - [Corporate Proxy / TLS Interception](#corporate-proxy--tls-interception)
 - [Images](#images)
+  - [How Image Resolution Works](#how-image-resolution-works)
+  - [Supplying Custom Images](#supplying-custom-images)
 - [Security Model](#security-model)
 - [Workspace](#workspace)
 - [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
 - [Project Structure](#project-structure)
-- [macOS Notes](#podman-machine--macos-notes)
+- [Podman Machine — macOS Notes](#podman-machine--macos-notes)
 - [Contributing](#contributing)
 - [License](#license)
 
