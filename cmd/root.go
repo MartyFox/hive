@@ -14,7 +14,8 @@ var rootCmd = &cobra.Command{
 	Long: fmt.Sprintf(`hive %s
 
 Runs AI coding agents (Claude, Copilot, Gemini, Codex) inside
-isolated Podman containers with read-write access to your project only.`, version.String()),
+isolated Podman containers with read-write workspace access,
+read-only host agent config by default, and explicit extra mounts.`, version.String()),
 	SilenceUsage: true,
 }
 
