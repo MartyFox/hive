@@ -406,10 +406,10 @@ func validateConfigHostPath(path string) (string, error) {
 
 func validateExtraHostPath(path string, allowDangerous bool) (string, error) {
 	clean, err := validateHostPath(path, allowDangerous)
-	if err != nil || allowDangerous {
-		return clean, err
+	if err != nil {
+		return "", err
 	}
-	if isSensitiveParent(clean) {
+	if !allowDangerous && isSensitiveParent(clean) {
 		return "", fmt.Errorf("%s exposes sensitive host config; set allowDangerousHostPath: true to override", clean)
 	}
 	return clean, nil

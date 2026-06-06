@@ -58,7 +58,7 @@ func init() {
 func runRun(_ *cobra.Command, args []string) error {
 	agent := args[0]
 	if !podman.ValidAgent(agent) {
-		return fmt.Errorf("unknown agent %q — valid:%s", agent, joinAgents())
+		return fmt.Errorf("unknown agent %q — valid:%s", agent, podman.JoinAgents())
 	}
 	if err := setupAgentRun(agent); err != nil {
 		return err
