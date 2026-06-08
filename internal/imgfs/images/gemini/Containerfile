@@ -9,4 +9,4 @@ RUN npm install -g @google/gemini-cli@0.41.2
 
 USER agent
 
-ENTRYPOINT ["gemini"]
+ENTRYPOINT ["hive-agent-entrypoint", "gemini", "gemini"]

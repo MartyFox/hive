@@ -9,4 +9,4 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.140
 
 USER agent
 
-ENTRYPOINT ["claude", "--dangerously-skip-permissions"]
+ENTRYPOINT ["hive-agent-entrypoint", "claude", "claude", "--dangerously-skip-permissions"]

@@ -14,6 +14,7 @@ RUN mkdir -p /home/agent/.config/gh
 
 # --yolo approves all tool permissions (equivalent to Claude's --dangerously-skip-permissions).
 # Auth: on first run copilot prompts '/login' — follow on-screen instructions.
-# Session persists via ~/.copilot/ bind mount; subsequent runs are pre-authenticated.
+# In read-only config mode Hive projects durable config/auth into an ephemeral
+# writable container home without writing session files to host ~/.copilot.
 # MCP: handled via built-in remote SSE transport (no local binary required).
-ENTRYPOINT ["copilot", "--yolo"]
+ENTRYPOINT ["hive-agent-entrypoint", "copilot", "copilot", "--yolo"]

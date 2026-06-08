@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/MartyFox/hive/internal/podman"
 	"github.com/spf13/cobra"
@@ -125,7 +127,11 @@ func executePromptRun(agent, image string, opts podman.RunOptions) error {
 	if err != nil {
 		return err
 	}
-	allArgs := append(runArgs, "--entrypoint", entrypoint, image)
+	allArgs := append([]string{}, runArgs...)
+	if entrypoint != "" {
+		allArgs = append(allArgs, "--entrypoint", entrypoint)
+	}
+	allArgs = append(allArgs, image)
 	return runPodmanChild(append(allArgs, promptArgs...), cleanupSecrets)
 }
 
@@ -146,11 +152,59 @@ func commandShell(wd string) string {
 
 func runPodmanChild(args []string, cleanup func()) error {
 	defer cleanup()
+	runDir, err := os.MkdirTemp("", "hive-run-*")
+	if err != nil {
+		return fmt.Errorf("creating run state directory: %w", err)
+	}
+	defer os.RemoveAll(runDir)
+
+	cidFile := filepath.Join(runDir, "container.cid")
+	args = appendCIDFileArg(args, cidFile)
 	cmd := exec.Command("podman", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	return waitForPodmanChild(cmd, cidFile, done)
+}
+
+func waitForPodmanChild(cmd *exec.Cmd, cidFile string, done <-chan error) error {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+
+	select {
+	case err := <-done:
+		return err
+	case sig := <-signals:
+		return stopPodmanChild(cmd, cidFile, done, sig)
+	}
+}
+
+func stopPodmanChild(cmd *exec.Cmd, cidFile string, done <-chan error, sig os.Signal) error {
+	fmt.Fprintf(os.Stderr, "[hive] received %s — stopping sandbox...\n", sig)
+	stopped := stopContainerFromCIDFile(cidFile)
+	if !stopped && cmd.Process != nil {
+		_ = cmd.Process.Signal(sig)
+	}
+	select {
+	case err := <-done:
+		if stopped {
+			return nil
+		}
+		return err
+	case <-time.After(5 * time.Second):
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		<-done
+		return fmt.Errorf("podman did not exit after %s; killed podman client", sig)
+	}
 }
 
 func execPodman(runArgs []string, image string) error {
@@ -165,12 +219,36 @@ func execPodman(runArgs []string, image string) error {
 func promptEntrypointArgs(agent, prompt string) (string, []string, bool) {
 	switch agent {
 	case "copilot":
-		return "copilot", []string{"--yolo", "--prompt", prompt}, true
+		return "", []string{"--prompt", prompt}, true
 	case "claude":
-		return "claude", []string{"--dangerously-skip-permissions", "-p", prompt}, true
+		return "", []string{"-p", prompt}, true
 	default:
 		return "", nil, false
 	}
+}
+
+func appendCIDFileArg(args []string, cidFile string) []string {
+	if len(args) == 0 {
+		return []string{"--cidfile", cidFile}
+	}
+	out := make([]string, 0, len(args)+2)
+	out = append(out, args[0], "--cidfile", cidFile)
+	return append(out, args[1:]...)
+}
+
+func stopContainerFromCIDFile(cidFile string) bool {
+	data, err := os.ReadFile(cidFile)
+	if err != nil {
+		return false
+	}
+	cid := strings.TrimSpace(string(data))
+	if cid == "" {
+		return false
+	}
+	cmd := exec.Command("podman", "stop", "--time", "1", cid)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run() == nil
 }
 
 // shellQuote wraps s in single quotes, escaping any embedded single quotes,

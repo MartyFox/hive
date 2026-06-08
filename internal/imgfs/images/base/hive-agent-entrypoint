@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+agent="${1:-}"
+if [ -z "$agent" ]; then
+  echo "hive-agent-entrypoint: missing agent key" >&2
+  exit 64
+fi
+shift
+
+case "$agent" in
+  claude)
+    live_home="/home/agent/.claude"
+    ;;
+  copilot)
+    live_home="/home/agent/.copilot"
+    ;;
+  gemini)
+    live_home="/home/agent/.gemini"
+    ;;
+  codex)
+    live_home="/home/agent/.config/openai"
+    ;;
+  *)
+    echo "hive-agent-entrypoint: unknown agent key: $agent" >&2
+    exit 64
+    ;;
+esac
+
+copy_projected_config() {
+  source_dir="$1"
+  target_dir="$2"
+
+  [ -d "$source_dir" ] || return 0
+  mkdir -p "$target_dir"
+
+  find "$source_dir" -mindepth 1 -maxdepth 1 -exec sh -c '
+    target_dir="$1"
+    shift
+    for item do
+      name="$(basename "$item")"
+      case "$name" in
+        session-state|command-history-state|logs|cache|tmp|history|session-store.db|*.log)
+          continue
+          ;;
+      esac
+      cp -R "$item" "$target_dir/"
+    done
+  ' sh "$target_dir" {} +
+}
+
+copy_projected_config "/home/agent/.hive-source/$agent" "$live_home"
+copy_projected_config "/home/agent/.hive-source/agents" "/home/agent/.agents"
+
+exec "$@"

@@ -3,6 +3,7 @@ package cmd
 import (
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 
 	for _, rel := range []string{
 		"base/Containerfile",
+		"base/hive-agent-entrypoint",
 		"claude/Containerfile",
 		"copilot/Containerfile",
 		"gemini/Containerfile",
@@ -35,6 +37,13 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 	cleanup()
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("cleanup should remove build context, stat err=%v", err)
+	}
+}
+
+func TestEmbeddedAgentEntrypointShellSyntax(t *testing.T) {
+	cmd := exec.Command("bash", "-n", filepath.Join("..", "internal", "imgfs", "images", "base", "hive-agent-entrypoint"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("bash -n hive-agent-entrypoint failed: %v\n%s", err, out)
 	}
 }
 

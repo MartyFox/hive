@@ -41,7 +41,7 @@ Cobra command layer. Owns CLI argument parsing, flag definitions, and top-level 
 All Podman integration and host configuration logic. Single file: `podman.go`. Responsibilities:
 
 - Config resolution (env → `~/.hive/config` → `~/.hive/config.yaml` → default)
-- Mount argument construction for agent config, Hive state, and extra mounts
+- Mount argument construction for agent config projection and extra mounts
 - Path validation and sensitive-path rejection
 - GitHub token injection (Podman secret or env-file modes)
 - Corporate CA cert injection at runtime
@@ -82,7 +82,7 @@ main() → cmd.Execute()
            interactive, no token   → podman.BuildRunArgs() → execPodman() [syscall.Exec]
 ```
 
-`syscall.Exec` replaces the hive process with Podman for interactive sessions with no token cleanup needed. When token injection is active, hive uses `exec.Command` (child process) so the `defer cleanup()` runs after Podman exits.
+`syscall.Exec` replaces the hive process with Podman for interactive sessions with no token cleanup needed. Prompt, command, and token-cleanup paths use `exec.Command` (child process). Child Podman runs receive a temporary `--cidfile`; on SIGINT/SIGTERM Hive stops the recorded container before exiting so `--prompt` runs do not leave token-consuming containers behind.
 
 ### `hive build [target]`
 
@@ -117,11 +117,10 @@ Environment variable
 `BuildRunArgs(agent, opts)` assembles all `podman run` arguments in this order:
 
 1. `baseRunArgs` — `--rm`, `-it`, `--cap-drop=ALL`, `--security-opt no-new-privileges`, `--network`, `-v $PWD:/workspace:rw,z`, `--workdir`
-2. `appendConfigMountArgs` — agent config dir + `~/.agents`, both `ro` by default; `rw` when `opts.WritableConfig` or `HIVE_AGENT_CONFIG_MODE=writable`
-3. `appendStateMountArgs` — `~/.hive/state/<agent>/` → `/home/agent/.hive-state:rw,z` (created if absent)
-4. `appendExtraMountArgs` — YAML `mounts[]` entries after validation
-5. `appendTokenArgs` — Podman secret or env-file for GitHub token; no-op when off
-6. `appendCertArgs` — `~/.hive/extra-ca.pem` bind mount + `NODE_EXTRA_CA_CERTS` env (no-op when absent)
+2. `appendConfigMountArgs` — agent config dir + `~/.agents`; in `ro`, mount to `/home/agent/.hive-source/...`; in `rw`, mount directly to live agent homes.
+3. `appendExtraMountArgs` — YAML `mounts[]` entries after validation
+4. `appendTokenArgs` — Podman secret or env-file for GitHub token; no-op when off
+5. `appendCertArgs` — `~/.hive/extra-ca.pem` bind mount + `NODE_EXTRA_CA_CERTS` env (no-op when absent)
 
 ## Path Validation
 

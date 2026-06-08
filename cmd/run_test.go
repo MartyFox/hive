@@ -14,10 +14,10 @@ func TestPromptEntrypointArgsDoesNotUseShell(t *testing.T) {
 	if !ok {
 		t.Fatal("promptEntrypointArgs() ok = false, want true")
 	}
-	if entrypoint != "claude" {
-		t.Fatalf("entrypoint = %q, want claude", entrypoint)
+	if entrypoint != "" {
+		t.Fatalf("entrypoint = %q, want default image entrypoint", entrypoint)
 	}
-	want := []string{"--dangerously-skip-permissions", "-p", prompt}
+	want := []string{"-p", prompt}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}
@@ -28,9 +28,33 @@ func TestPromptEntrypointArgsDoesNotUseShell(t *testing.T) {
 	}
 }
 
+func TestPromptEntrypointArgsUsesDefaultCopilotEntrypoint(t *testing.T) {
+	prompt := "hello"
+
+	entrypoint, args, ok := promptEntrypointArgs("copilot", prompt)
+	if !ok {
+		t.Fatal("promptEntrypointArgs() ok = false, want true")
+	}
+	if entrypoint != "" {
+		t.Fatalf("entrypoint = %q, want default image entrypoint", entrypoint)
+	}
+	want := []string{"--prompt", prompt}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
 func TestPromptEntrypointArgsRejectsUnsupportedAgent(t *testing.T) {
 	if _, _, ok := promptEntrypointArgs("gemini", "hello"); ok {
 		t.Fatal("promptEntrypointArgs() ok = true for unsupported agent")
+	}
+}
+
+func TestAppendCIDFileArgAddsRunCIDFile(t *testing.T) {
+	args := appendCIDFileArg([]string{"run", "--rm", "--network", "hive-net"}, "/tmp/hive.cid")
+	want := []string{"run", "--cidfile", "/tmp/hive.cid", "--rm", "--network", "hive-net"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("appendCIDFileArg() = %#v, want %#v", args, want)
 	}
 }
 

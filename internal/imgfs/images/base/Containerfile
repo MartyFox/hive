@@ -54,6 +54,9 @@ RUN if [ "$HIVE_BEADS" = "1" ]; then \
       echo "[hive-base] Beads (bd) not installed — set HIVE_BEADS=1 in ~/.hive/config to include"; \
     fi
 
+COPY hive-agent-entrypoint /usr/local/bin/hive-agent-entrypoint
+RUN chmod 0755 /usr/local/bin/hive-agent-entrypoint
+
 # ── Non-root agent user ───────────────────────────────────────────────────────
 # node:22-bookworm-slim ships a 'node' user at uid/gid 1000 — rename it.
 RUN groupmod -n agent node \
