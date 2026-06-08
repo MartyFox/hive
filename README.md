@@ -163,9 +163,9 @@ All agents start in high-autonomy mode:
 
 ## Global Config — Auth and Personal Instructions
 
-Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without modifying the host copy. Writable agent state (session files, caches) lives at `~/.hive/state/<agent>/` on the host, mounted read-write at `/home/agent/.hive-state/` inside the container.
+Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without modifying the host copy. Writable agent state (session files, caches) lives at `~/.hive/state/<agent>/` on the host, mounted read-write at `/home/agent/.hive-state/` inside the container. In read-only mode, Copilot runs with `COPILOT_HOME=/home/agent/.hive-state/copilot-home`; the image imports durable config/auth from `/home/agent/.copilot` but writes session history, logs, and command history only to Hive state.
 
-Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=writable` only for login or setup flows that must update the host config.
+Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=read-write` only for login or setup flows that must update the host config.
 
 | Agent | Default host path | Container path | Default mode | Override key |
 |---|---|---|---|---|
@@ -224,7 +224,7 @@ github:
   tokenMode: off # off | podman-secret | env-file
 
 agentConfig:
-  mode: read-only # read-only | writable
+  mode: read-only # read-only | read-write
   paths:
     claude: ~/.claude
     copilot: ~/.copilot
@@ -236,7 +236,7 @@ mounts:
   - name: project-docs
     host: ~/Documents/project-docs
     container: /mnt/project-docs
-    mode: read-only # read-only | writable
+    mode: read-only # read-only | read-write
 ```
 
 **Extra mount constraints:**
@@ -261,7 +261,7 @@ mounts:
 | `HIVE_NETWORK` | `hive-net` | Podman bridge network name |
 | `HIVE_REGISTRY` | `ghcr.io/martyfox` | Registry base URL for image pulls |
 | `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
-| `HIVE_AGENT_CONFIG_MODE` | `read-only` | Set to `writable` or `rw` to mount host agent config read-write |
+| `HIVE_AGENT_CONFIG_MODE` | `read-only` | Set to `read-write` or `rw` to mount host agent config read-write; legacy `writable` is accepted |
 | `HIVE_GH_TOKEN_MODE` | `off` | Set to `podman-secret` or `env-file` to inject host `gh` token; `true`/`1` map to `env-file` |
 | `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
 | `HIVE_BEADS_VERSION` | `1.0.4` | Pinned `@beads/bd` version used when `HIVE_BEADS=1` |

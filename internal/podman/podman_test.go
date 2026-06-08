@@ -704,7 +704,7 @@ func TestBuildRunArgs_writableConfigFromYAML(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	writeHiveYAMLConfig(t, home, "agentConfig:\n  mode: writable\n")
+	writeHiveYAMLConfig(t, home, "agentConfig:\n  mode: read-write\n")
 
 	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
@@ -712,6 +712,31 @@ func TestBuildRunArgs_writableConfigFromYAML(t *testing.T) {
 	want := filepath.Join(home, ".claude") + ":/home/agent/.claude:rw,z"
 	if !strings.Contains(joined, want) {
 		t.Errorf("BuildRunArgs missing read-write config mount %q in %q", want, joined)
+	}
+}
+
+func TestAgentConfigWritableModes(t *testing.T) {
+	tests := []struct {
+		mode string
+		want bool
+	}{
+		{"", false},
+		{"ro", false},
+		{"read-only", false},
+		{"rw", true},
+		{"read-write", true},
+		{"writable", true},
+		{"writeable", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			setHome(t)
+			t.Setenv("HIVE_AGENT_CONFIG_MODE", tt.mode)
+			if got := AgentConfigWritable(); got != tt.want {
+				t.Fatalf("AgentConfigWritable() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -780,6 +805,40 @@ func TestBuildRunArgs_stateMountReadWrite(t *testing.T) {
 	want := statePath + ":/home/agent/.hive-state:rw,z"
 	if !strings.Contains(joined, want) {
 		t.Errorf("BuildRunArgs missing state mount %q in %q", want, joined)
+	}
+}
+
+func TestBuildRunArgs_copilotReadOnlyRedirectsRuntimeHomeToHiveState(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".copilot"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+
+	configMount := filepath.Join(home, ".copilot") + ":/home/agent/.copilot:ro,z"
+	if !strings.Contains(joined, configMount) {
+		t.Fatalf("BuildRunArgs missing read-only copilot config mount %q in %q", configMount, joined)
+	}
+	if !hasAdjacentArgs(args, "-e", "COPILOT_HOME=/home/agent/.hive-state/copilot-home") {
+		t.Fatalf("BuildRunArgs should redirect COPILOT_HOME to Hive state in read-only mode; args=%#v", args)
+	}
+}
+
+func TestBuildRunArgs_copilotWritableConfigKeepsRuntimeHome(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".copilot"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{WritableConfig: true})
+	defer cleanup()
+	for i, arg := range args {
+		if arg == "-e" && i+1 < len(args) && strings.HasPrefix(args[i+1], "COPILOT_HOME=") {
+			t.Fatalf("BuildRunArgs should not redirect COPILOT_HOME when config is writable; args=%#v", args)
+		}
 	}
 }
 
@@ -1054,4 +1113,13 @@ func TestJoinAgents(t *testing.T) {
 			t.Errorf("JoinAgents() missing %q in %q", a, s)
 		}
 	}
+}
+
+func hasAdjacentArgs(args []string, first, second string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == first && args[i+1] == second {
+			return true
+		}
+	}
+	return false
 }

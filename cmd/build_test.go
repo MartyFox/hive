@@ -19,6 +19,7 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 		"base/Containerfile",
 		"claude/Containerfile",
 		"copilot/Containerfile",
+		"copilot/copilot-entrypoint.sh",
 		"gemini/Containerfile",
 		"codex/Containerfile",
 	} {
