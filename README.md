@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="/MartyFox/hive/raw/main/docs/brand/logo-lockup-light.png" alt="hive - Host Isolated Virtual Environment" width="720"/>
+  <img src="https://raw.githubusercontent.com/MartyFox/hive/refs/heads/main/docs/brand/logo-lockup-light.png" alt="hive - Host Isolated Virtual Environment" width="720"/>
 </p>
 
 <p align="center">
