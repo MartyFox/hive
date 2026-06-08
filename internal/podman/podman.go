@@ -302,8 +302,19 @@ type RunOptions struct {
 
 // AgentConfigWritable reports whether host agent config should be mounted rw.
 func AgentConfigWritable() bool {
-	mode := strings.ToLower(hiveConfigValDefault("HIVE_AGENT_CONFIG_MODE", yamlConfig().AgentConfig.Mode, "read-only"))
-	return mode == "writable" || mode == "rw"
+	mode := normalizeAgentConfigMode(hiveConfigValDefault("HIVE_AGENT_CONFIG_MODE", yamlConfig().AgentConfig.Mode, "read-only"))
+	return mode == "rw"
+}
+
+func normalizeAgentConfigMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "read-only", "ro":
+		return "ro"
+	case "read-write", "rw", "writable":
+		return "rw"
+	default:
+		return "ro"
+	}
 }
 
 // GitHubTokenEnabled reports whether host gh auth should be injected.
@@ -475,7 +486,7 @@ func normalizeMountMode(mode string) (string, error) {
 	case "writable", "read-write", "rw":
 		return "rw", nil
 	default:
-		return "", fmt.Errorf("must be read-only or writable")
+		return "", fmt.Errorf("must be read-only or read-write")
 	}
 }
 
@@ -558,6 +569,7 @@ func BuildRunArgs(agent string, opts RunOptions) ([]string, func(), error) {
 	if args, err = appendStateMountArgs(args, agent); err != nil {
 		return nil, cleanup, err
 	}
+	args = appendAgentStateEnvArgs(args, agent, opts)
 	if args, err = appendExtraMountArgs(args); err != nil {
 		return nil, cleanup, err
 	}
@@ -605,11 +617,15 @@ func appendConfigMountArgs(args []string, agent string, opts RunOptions) ([]stri
 }
 
 func configMountMode(opts RunOptions) string {
-	if opts.WritableConfig || AgentConfigWritable() {
+	if agentConfigIsWritable(opts) {
 		fmt.Fprintln(os.Stderr, "[hive warn] agent config mounted read-write")
 		return "rw"
 	}
 	return "ro"
+}
+
+func agentConfigIsWritable(opts RunOptions) bool {
+	return opts.WritableConfig || AgentConfigWritable()
 }
 
 func appendStateMountArgs(args []string, agent string) ([]string, error) {
@@ -621,6 +637,14 @@ func appendStateMountArgs(args []string, agent string) ([]string, error) {
 	args = append(args, "-v", statePath+":/home/agent/.hive-state:rw,z")
 	fmt.Printf("[hive] %-36s → %s (rw)\n", "hive agent state", "/home/agent/.hive-state")
 	return args, nil
+}
+
+func appendAgentStateEnvArgs(args []string, agent string, opts RunOptions) []string {
+	if agent != "copilot" || agentConfigIsWritable(opts) {
+		return args
+	}
+	fmt.Println("[hive] Copilot runtime state → /home/agent/.hive-state/copilot-home (rw)")
+	return append(args, "-e", "COPILOT_HOME=/home/agent/.hive-state/copilot-home")
 }
 
 func appendExtraMountArgs(args []string) ([]string, error) {

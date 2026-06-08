@@ -8,12 +8,16 @@ LABEL org.opencontainers.image.source="https://github.com/MartyFox/hive" \
 
 RUN npm install -g @github/copilot@1.0.46
 
+COPY copilot-entrypoint.sh /usr/local/bin/hive-copilot-entrypoint
+RUN chmod 0755 /usr/local/bin/hive-copilot-entrypoint
+
 USER agent
 
 RUN mkdir -p /home/agent/.config/gh
 
 # --yolo approves all tool permissions (equivalent to Claude's --dangerously-skip-permissions).
 # Auth: on first run copilot prompts '/login' — follow on-screen instructions.
-# Session persists via ~/.copilot/ bind mount; subsequent runs are pre-authenticated.
+# In read-only config mode Hive points COPILOT_HOME at writable Hive state and
+# this wrapper imports durable config/auth without writing session files to host ~/.copilot.
 # MCP: handled via built-in remote SSE transport (no local binary required).
-ENTRYPOINT ["copilot", "--yolo"]
+ENTRYPOINT ["hive-copilot-entrypoint"]

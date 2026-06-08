@@ -129,16 +129,18 @@ If the agent CLI accepts a non-interactive prompt flag, add it to `promptEntrypo
 func promptEntrypointArgs(agent, prompt string) (string, []string, bool) {
     switch agent {
     case "copilot":
-        return "copilot", []string{"--yolo", "--prompt", prompt}, true
+        return "", []string{"--prompt", prompt}, true
     case "claude":
-        return "claude", []string{"--dangerously-skip-permissions", "-p", prompt}, true
+        return "", []string{"-p", prompt}, true
     case "myagent":
-        return "myagent", []string{"--yes", "--prompt", prompt}, true
+        return "", []string{"--prompt", prompt}, true
     default:
         return "", nil, false
     }
 }
 ```
+
+Return an empty entrypoint when the image default entrypoint already contains the right wrapper or approval flags. Use a non-empty entrypoint only when prompt mode must bypass the default image entrypoint.
 
 If the agent does not support prompt mode, leave the `default` case — `--prompt myagent` will return a clear error to the user.
 
