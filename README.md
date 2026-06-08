@@ -20,8 +20,6 @@ each in its own hardened container with read-write access to your project worksp
 
 ## Table of Contents
 
-- [Table of Contents](#table-of-contents)
-- [Why a binary instead of a shell script?](#why-a-binary-instead-of-a-shell-script)
 - [Requirements](#requirements)
 - [Install](#install)
   - [Option 1: `go install`](#option-1-go-install)
@@ -49,18 +47,11 @@ each in its own hardened container with read-write access to your project worksp
 - [Security Model](#security-model)
 - [Workspace](#workspace)
 - [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
-- [Project Structure](#project-structure)
 - [Podman Machine — macOS Notes](#podman-machine--macos-notes)
 - [Contributing](#contributing)
 - [License](#license)
 
 ---
-
-## Why a binary instead of a shell script?
-
-- **Self-contained** — all Containerfiles are embedded via `//go:embed`.
-- **Portable** — install with `go install`, download a release binary, or build from source.
-- **Auto-provision** — `hive run <agent>` pulls a prebuilt image on first use.
 
 ## Requirements
 
@@ -107,23 +98,30 @@ hive run codex
 
 ### `hive run <agent>`
 
-Run an agent REPL in the current directory.
+Run an agent in the current directory.
 
 ```bash
-# one-shot task
+# interactive REPL
+hive run claude
+
+# one-shot command
 hive run claude --cmd "add input validation to packages/api/src/routes/auth.ts"
 
-# prompt shortcut
+# pass a prompt directly (claude and copilot only)
 hive run claude --prompt "write unit tests for src/utils/parser.ts"
+hive run copilot --prompt "open a PR for these changes"
 ```
 
-> `--cmd` is passed verbatim to `bash -c`. Only pass trusted strings — `$(...)` executes.
-
-Use `--writable-config` when the agent must update its host config (e.g. first-run login). Use `--gh-token` to inject host `gh` credentials.
+| Flag | Description |
+|---|---|
+| `--cmd <shell>` | Run a one-shot shell command instead of interactive REPL. Passed verbatim to `bash -c` — only pass trusted strings; `$(...)` executes. |
+| `--prompt <text>` | Pass a prompt to the agent non-interactively. Supported by `claude` and `copilot` only — other agents return an error. Prompt text is never evaluated by the shell. |
+| `--writable-config` | Mount host agent config read-write. Use only for first-run login or setup flows that must update host config. |
+| `--gh-token` | Inject host `gh auth token` into the container via a temporary Podman secret. |
 
 ### `hive build [agent|base|all]`
 
-Build images locally from embedded Containerfiles.
+Build images locally from embedded Containerfiles. If no argument is given, builds base then all agents. Building an individual agent image automatically builds the base image first if it is not present.
 
 ```bash
 hive build
@@ -133,7 +131,7 @@ hive build base
 
 ### `hive update [agent|base|all]`
 
-Rebuild without cache to pick up latest published CLI versions.
+Rebuild without cache to pick up the latest published CLI versions.
 
 ```bash
 hive update
@@ -165,9 +163,9 @@ All agents start in high-autonomy mode:
 
 ## Global Config — Auth and Personal Instructions
 
-Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without writing to the host copy. Writable state lives at `~/.hive/state/<agent>/`.
+Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without modifying the host copy. Writable agent state (session files, caches) lives at `~/.hive/state/<agent>/` on the host, mounted read-write at `/home/agent/.hive-state/` inside the container.
 
-Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=writable` only for login/setup flows that must update the host config.
+Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=writable` only for login or setup flows that must update the host config.
 
 | Agent | Default host path | Container path | Default mode | Override key |
 |---|---|---|---|---|
@@ -178,7 +176,9 @@ Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=writable` only for login/setu
 | all | `~/.agents/` | `/home/agent/.agents/` | `ro` | `AGENTS_HOME` |
 | all | `~/.hive/state/<agent>/` | `/home/agent/.hive-state/` | `rw` | *(not configurable)* |
 
-Host paths can be overridden in `~/.hive/config.yaml`. If a host directory does not exist, hive warns and starts without it.
+Override keys (`CLAUDE_HOME`, `COPILOT_HOME`, etc.) accept absolute paths or paths starting with `~`. Paths that expose broad credential stores — such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gcloud`, or `~/.kube` — are rejected to prevent accidental host exposure. Use a more specific subdirectory.
+
+If a host directory does not exist, hive warns and starts without it.
 
 ### Authentication
 
@@ -239,7 +239,20 @@ mounts:
     mode: read-only # read-only | writable
 ```
 
-Extra mount constraints: `host` must be an absolute path or start with `~`; `container` must be under `/mnt/`.
+**Extra mount constraints:**
+
+- `host` must be an absolute path or start with `~`. Shell variables (`$VAR`) are rejected.
+- `container` must be under `/mnt/`.
+- Paths inside sensitive credential directories are rejected by default. Add `allowDangerousHostPath: true` to the mount entry to override:
+
+```yaml
+mounts:
+  - name: corp-certs
+    host: ~/.corp/certs
+    container: /mnt/certs
+    mode: read-only
+    allowDangerousHostPath: true
+```
 
 ### Supported Keys
 
@@ -325,37 +338,13 @@ Security controls are applied by `hive run`, not baked into the image.
 
 [Beads](https://github.com/gastownhall/beads/tree/main) is an optional local issue tracker. Set `HIVE_BEADS=1` to install `bd` in the base image and auto-run `bd init` before `--cmd` tasks.
 
-## Project Structure
-
-```text
-hive/
-├── main.go
-├── go.mod                           module github.com/MartyFox/hive
-├── cmd/
-│   ├── root.go
-│   ├── build.go
-│   ├── run.go
-│   ├── update.go
-│   ├── list.go
-│   └── version.go
-└── internal/
-    ├── podman/podman.go
-    └── imgfs/
-        ├── imgfs.go
-        └── images/
-            ├── base/Containerfile   node:22-bookworm-slim + git/curl/jq/ripgrep/zsh/python3/gh; bd optional
-            ├── claude/Containerfile @anthropic-ai/claude-code
-            ├── copilot/Containerfile @github/copilot
-            ├── gemini/Containerfile @google/gemini-cli
-            └── codex/Containerfile  @openai/codex
-```
-
 ## Podman Machine — macOS Notes
 
-On macOS, Podman runs inside a Linux VM. hive starts the machine automatically if needed.
+On macOS, Podman runs inside a Linux VM. hive detects and starts the Podman Machine automatically when needed. If the machine has not been initialised yet, run:
 
 ```bash
-export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock
+podman machine init
+podman machine start
 ```
 
 ## Contributing

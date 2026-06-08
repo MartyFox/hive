@@ -33,25 +33,5 @@ func runUpdate(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("extracting embedded Containerfiles: %w", err)
 	}
 	defer cleanup()
-
-	switch target {
-	case "all":
-		if err := buildBase(ctxDir, true); err != nil {
-			return err
-		}
-		for _, a := range podman.Agents() {
-			if err := buildAgent(a, ctxDir, true); err != nil {
-				return err
-			}
-		}
-		fmt.Println("[hive] All images updated.")
-	case "base":
-		return buildBase(ctxDir, true)
-	default:
-		if !podman.ValidAgent(target) {
-			return fmt.Errorf("unknown agent %q — valid: base %s", target, joinAgents())
-		}
-		return buildAgent(target, ctxDir, true)
-	}
-	return nil
+	return buildTarget(target, ctxDir, true)
 }

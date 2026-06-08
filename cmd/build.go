@@ -38,41 +38,42 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("extracting embedded Containerfiles: %w", err)
 	}
 	defer cleanup()
-	return buildTarget(target, ctxDir)
+	return buildTarget(target, ctxDir, false)
 }
 
-func buildTarget(target, ctxDir string) error {
+func buildTarget(target, ctxDir string, noCache bool) error {
 	switch target {
 	case "all":
-		return buildAll(ctxDir)
+		return buildAll(ctxDir, noCache)
 	case "base":
-		return buildBase(ctxDir, false)
+		return buildBase(ctxDir, noCache)
 	default:
-		return buildSingleAgent(target, ctxDir)
+		return buildSingleAgent(target, ctxDir, noCache)
 	}
 }
 
-func buildAll(ctxDir string) error {
-	if err := buildBase(ctxDir, false); err != nil {
+func buildAll(ctxDir string, noCache bool) error {
+	if err := buildBase(ctxDir, noCache); err != nil {
 		return err
 	}
 	for _, a := range podman.Agents() {
-		if err := buildAgent(a, ctxDir, false); err != nil {
+		if err := buildAgent(a, ctxDir, noCache); err != nil {
 			return err
 		}
 	}
-	fmt.Println("[hive] All images built.")
+	action := "built"
+	if noCache {
+		action = "updated"
+	}
+	fmt.Printf("[hive] All images %s.\n", action)
 	return nil
 }
 
-func buildSingleAgent(target, ctxDir string) error {
+func buildSingleAgent(target, ctxDir string, noCache bool) error {
 	if !podman.ValidAgent(target) {
-		return fmt.Errorf("unknown agent %q — valid: base %s", target, joinAgents())
+		return fmt.Errorf("unknown agent %q — valid: base %s", target, podman.JoinAgents())
 	}
-	if err := buildAgent(target, ctxDir, false); err != nil {
-		return err
-	}
-	return nil
+	return buildAgent(target, ctxDir, noCache)
 }
 
 func buildBase(ctxDir string, noCache bool) error {
@@ -135,10 +136,3 @@ func extractBuildEntry(fsys fs.FS, dir, path string, d fs.DirEntry) error {
 	return os.WriteFile(dest, data, 0644)
 }
 
-func joinAgents() string {
-	s := ""
-	for _, a := range podman.Agents() {
-		s += " " + a
-	}
-	return s
-}
