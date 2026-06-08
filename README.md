@@ -104,8 +104,9 @@ Run an agent in the current directory.
 # interactive REPL
 hive run claude
 
-# one-shot command
-hive run claude --cmd "add input validation to packages/api/src/routes/auth.ts"
+# run a one-shot shell command in the isolated sandbox
+hive run claude --cmd "npm test -- --testPathPattern=auth"
+hive run copilot --cmd "find src -name '*.test.ts' | head -5"
 
 # pass a prompt directly (claude and copilot only)
 hive run claude --prompt "write unit tests for src/utils/parser.ts"
