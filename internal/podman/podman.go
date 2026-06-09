@@ -633,6 +633,14 @@ func agentConfigIsWritable(opts RunOptions) bool {
 	return opts.WritableConfig || AgentConfigWritable()
 }
 
+func appendAgentStateEnvArgs(args []string, agent string, opts RunOptions) []string {
+	if agent != "copilot" || agentConfigIsWritable(opts) {
+		return args
+	}
+	fmt.Println("[hive] Copilot runtime state → /home/agent/.hive-state/copilot-home (rw)")
+	return append(args, "-e", "COPILOT_HOME=/home/agent/.hive-state/copilot-home")
+}
+
 func appendExtraMountArgs(args []string) ([]string, error) {
 	extras, err := extraMounts()
 	if err != nil {

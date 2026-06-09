@@ -21,6 +21,7 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 		"base/hive-agent-entrypoint",
 		"claude/Containerfile",
 		"copilot/Containerfile",
+		"copilot/copilot-entrypoint.sh",
 		"gemini/Containerfile",
 		"codex/Containerfile",
 	} {
