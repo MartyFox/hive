@@ -5,9 +5,9 @@
 <p align="center">
   <a href="https://github.com/MartyFox/hive/actions/workflows/build-images.yml"><img src="https://github.com/MartyFox/hive/actions/workflows/build-images.yml/badge.svg" alt="Build images"></a>
   <a href="https://github.com/MartyFox/hive/actions/workflows/release-binary.yml"><img src="https://github.com/MartyFox/hive/actions/workflows/release-binary.yml/badge.svg" alt="Release"></a>
-  <!-- <a href="https://github.com/MartyFox/hive/releases/latest"><img src="https://img.shields.io/github/v/release/MartyFox/hive" alt="Latest release"></a> -->
-  <!-- <img src="https://img.shields.io/badge/go-1.21+-00ADD8?logo=go&logoColor=white" alt="Go 1.21+"> -->
-  <!-- <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a> -->
+  <a href="https://github.com/MartyFox/hive/releases/latest"><img src="https://img.shields.io/github/v/release/MartyFox/hive" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/go-1.21+-00ADD8?logo=go&logoColor=white" alt="Go 1.21+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0"></a>
 </p>
 
 <p align="center">
@@ -20,23 +20,36 @@ each in its own hardened container with read-write access to your project worksp
 
 ## Table of Contents
 
-- [Host agent config mounts read-only by default. Hive mounts those host directories at `/home/agent/.hive-source/...` and the image entrypoint copies non-volatile config into ephemeral writable homes inside the container. Agents can read credentials, skills, and personal instructions, and can write session/history/log files locally, but those writes disappear when the `--rm` container exits.](#host-agent-config-mounts-read-only-by-default-hive-mounts-those-host-directories-at-homeagenthive-source-and-the-image-entrypoint-copies-non-volatile-config-into-ephemeral-writable-homes-inside-the-container-agents-can-read-credentials-skills-and-personal-instructions-and-can-write-sessionhistorylog-files-locally-but-those-writes-disappear-when-the---rm-container-exits)
-    - [Authentication](#authentication)
-  - [Project Instructions](#project-instructions)
-  - [Configuration](#configuration)
-    - [Example `~/.hive/config.yaml`](#example-hiveconfigyaml)
-    - [Supported Keys](#supported-keys)
-    - [Example Legacy `~/.hive/config`](#example-legacy-hiveconfig)
-  - [Corporate Proxy / TLS Interception](#corporate-proxy--tls-interception)
-  - [Images](#images)
-    - [How Image Resolution Works](#how-image-resolution-works)
-    - [Supplying Custom Images](#supplying-custom-images)
-  - [Security Model](#security-model)
-  - [Workspace](#workspace)
-  - [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
-  - [Podman Machine — macOS Notes](#podman-machine--macos-notes)
-  - [Contributing](#contributing)
-  - [License](#license)
+- [Requirements](#requirements)
+- [Install](#install)
+  - [Option 1: `go install`](#option-1-go-install)
+  - [Option 2: build from source](#option-2-build-from-source)
+  - [Option 3: download a release binary](#option-3-download-a-release-binary)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+  - [`hive run <agent>`](#hive-run-agent)
+  - [`hive build [agent|base|all]`](#hive-build-agentbaseall)
+  - [`hive update [agent|base|all]`](#hive-update-agentbaseall)
+  - [`hive list`](#hive-list)
+  - [`hive version`](#hive-version)
+- [Agents and Approval Mode](#agents-and-approval-mode)
+- [Global Config — Auth and Personal Instructions](#global-config--auth-and-personal-instructions)
+  - [Authentication](#authentication)
+- [Project Instructions](#project-instructions)
+- [Configuration](#configuration)
+  - [Example `~/.hive/config.yaml`](#example-hiveconfigyaml)
+  - [Supported Keys](#supported-keys)
+  - [Example Legacy `~/.hive/config`](#example-legacy-hiveconfig)
+- [Corporate Proxy / TLS Interception](#corporate-proxy--tls-interception)
+- [Images](#images)
+  - [How Image Resolution Works](#how-image-resolution-works)
+  - [Supplying Custom Images](#supplying-custom-images)
+- [Security Model](#security-model)
+- [Workspace](#workspace)
+- [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
+- [Podman Machine — macOS Notes](#podman-machine--macos-notes)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -151,11 +164,7 @@ All agents start in high-autonomy mode:
 
 ## Global Config — Auth and Personal Instructions
 
-<<<<<<< HEAD
 Host agent config mounts read-only by default. Hive mounts those host directories at `/home/agent/.hive-source/...` and the image entrypoint copies non-volatile config into ephemeral writable homes inside the container. Agents can read credentials, skills, and personal instructions, and can write session/history/log files locally, but those writes disappear when the `--rm` container exits.
-=======
-Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without modifying the host copy. Writable agent state (session files, caches) lives at `~/.hive/state/<agent>/` on the host, mounted read-write at `/home/agent/.hive-state/` inside the container. In read-only mode, Copilot runs with `COPILOT_HOME=/home/agent/.hive-state/copilot-home`; the image imports durable config/auth from `/home/agent/.copilot` but writes session history, logs, and command history only to Hive state.
->>>>>>> main
 
 Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=read-write` only for login or setup flows that must update the host config.
 
