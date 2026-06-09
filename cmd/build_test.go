@@ -21,7 +21,6 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 		"base/hive-agent-entrypoint",
 		"claude/Containerfile",
 		"copilot/Containerfile",
-		"copilot/copilot-entrypoint.sh",
 		"gemini/Containerfile",
 		"codex/Containerfile",
 	} {
@@ -38,6 +37,30 @@ func TestExtractBuildContextCopiesEmbeddedImages(t *testing.T) {
 	cleanup()
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("cleanup should remove build context, stat err=%v", err)
+	}
+}
+
+func TestEmbeddedContainerfileCopySourcesExist(t *testing.T) {
+	containerfiles, err := filepath.Glob(filepath.Join("..", "internal", "imgfs", "images", "*", "Containerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, containerfile := range containerfiles {
+		data, err := os.ReadFile(containerfile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contextDir := filepath.Dir(containerfile)
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(strings.TrimSpace(line))
+			if len(fields) < 2 || fields[0] != "COPY" || strings.HasPrefix(fields[1], "--from=") {
+				continue
+			}
+			source := filepath.Join(contextDir, fields[1])
+			if _, err := os.Stat(source); err != nil {
+				t.Fatalf("%s copies missing source %s: %v", containerfile, fields[1], err)
+			}
+		}
 	}
 }
 
