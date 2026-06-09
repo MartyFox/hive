@@ -8,9 +8,6 @@ LABEL org.opencontainers.image.source="https://github.com/MartyFox/hive" \
 
 RUN npm install -g @github/copilot@1.0.46
 
-COPY copilot-entrypoint.sh /usr/local/bin/hive-copilot-entrypoint
-RUN chmod 0755 /usr/local/bin/hive-copilot-entrypoint
-
 USER agent
 
 RUN mkdir -p /home/agent/.config/gh
