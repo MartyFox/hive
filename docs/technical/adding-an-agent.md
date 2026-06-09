@@ -80,7 +80,7 @@ func agentConfigMount(agent string) (configMount, bool) {
     // ... existing cases ...
     case "myagent":
         src := hiveConfigValDefault("MYAGENT_HOME", paths.MyAgent, home+"/.myagent")
-        return configMount{src, "/home/agent/.myagent", "myagent config"}, true
+        return configMount{src: src, dst: "/home/agent/.myagent", desc: "myagent config", key: "myagent"}, true
     default:
         return configMount{}, false
     }

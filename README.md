@@ -20,36 +20,23 @@ each in its own hardened container with read-write access to your project worksp
 
 ## Table of Contents
 
-- [Requirements](#requirements)
-- [Install](#install)
-  - [Option 1: `go install`](#option-1-go-install)
-  - [Option 2: build from source](#option-2-build-from-source)
-  - [Option 3: download a release binary](#option-3-download-a-release-binary)
-- [Quick Start](#quick-start)
-- [Commands](#commands)
-  - [`hive run <agent>`](#hive-run-agent)
-  - [`hive build [agent|base|all]`](#hive-build-agentbaseall)
-  - [`hive update [agent|base|all]`](#hive-update-agentbaseall)
-  - [`hive list`](#hive-list)
-  - [`hive version`](#hive-version)
-- [Agents and Approval Mode](#agents-and-approval-mode)
-- [Global Config — Auth and Personal Instructions](#global-config--auth-and-personal-instructions)
-  - [Authentication](#authentication)
-- [Project Instructions](#project-instructions)
-- [Configuration](#configuration)
-  - [Example `~/.hive/config.yaml`](#example-hiveconfigyaml)
-  - [Supported Keys](#supported-keys)
-  - [Example Legacy `~/.hive/config`](#example-legacy-hiveconfig)
-- [Corporate Proxy / TLS Interception](#corporate-proxy--tls-interception)
-- [Images](#images)
-  - [How Image Resolution Works](#how-image-resolution-works)
-  - [Supplying Custom Images](#supplying-custom-images)
-- [Security Model](#security-model)
-- [Workspace](#workspace)
-- [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
-- [Podman Machine — macOS Notes](#podman-machine--macos-notes)
-- [Contributing](#contributing)
-- [License](#license)
+- [Host agent config mounts read-only by default. Hive mounts those host directories at `/home/agent/.hive-source/...` and the image entrypoint copies non-volatile config into ephemeral writable homes inside the container. Agents can read credentials, skills, and personal instructions, and can write session/history/log files locally, but those writes disappear when the `--rm` container exits.](#host-agent-config-mounts-read-only-by-default-hive-mounts-those-host-directories-at-homeagenthive-source-and-the-image-entrypoint-copies-non-volatile-config-into-ephemeral-writable-homes-inside-the-container-agents-can-read-credentials-skills-and-personal-instructions-and-can-write-sessionhistorylog-files-locally-but-those-writes-disappear-when-the---rm-container-exits)
+    - [Authentication](#authentication)
+  - [Project Instructions](#project-instructions)
+  - [Configuration](#configuration)
+    - [Example `~/.hive/config.yaml`](#example-hiveconfigyaml)
+    - [Supported Keys](#supported-keys)
+    - [Example Legacy `~/.hive/config`](#example-legacy-hiveconfig)
+  - [Corporate Proxy / TLS Interception](#corporate-proxy--tls-interception)
+  - [Images](#images)
+    - [How Image Resolution Works](#how-image-resolution-works)
+    - [Supplying Custom Images](#supplying-custom-images)
+  - [Security Model](#security-model)
+  - [Workspace](#workspace)
+  - [Beads (`bd`) — Issue Tracking](#beads-bd--issue-tracking)
+  - [Podman Machine — macOS Notes](#podman-machine--macos-notes)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ---
 
@@ -164,18 +151,21 @@ All agents start in high-autonomy mode:
 
 ## Global Config — Auth and Personal Instructions
 
+<<<<<<< HEAD
+Host agent config mounts read-only by default. Hive mounts those host directories at `/home/agent/.hive-source/...` and the image entrypoint copies non-volatile config into ephemeral writable homes inside the container. Agents can read credentials, skills, and personal instructions, and can write session/history/log files locally, but those writes disappear when the `--rm` container exits.
+=======
 Host agent config mounts read-only by default — agents can read credentials, skills, and personal instructions without modifying the host copy. Writable agent state (session files, caches) lives at `~/.hive/state/<agent>/` on the host, mounted read-write at `/home/agent/.hive-state/` inside the container. In read-only mode, Copilot runs with `COPILOT_HOME=/home/agent/.hive-state/copilot-home`; the image imports durable config/auth from `/home/agent/.copilot` but writes session history, logs, and command history only to Hive state.
+>>>>>>> main
 
 Use `--writable-config` or `HIVE_AGENT_CONFIG_MODE=read-write` only for login or setup flows that must update the host config.
 
-| Agent | Default host path | Container path | Default mode | Override key |
+| Agent | Default host path | Read-only source path | Read-write live path | Override key |
 |---|---|---|---|---|
-| claude | `~/.claude/` | `/home/agent/.claude/` | `ro` | `CLAUDE_HOME` |
-| copilot | `~/.copilot/` | `/home/agent/.copilot/` | `ro` | `COPILOT_HOME` |
-| gemini | `~/.gemini/` | `/home/agent/.gemini/` | `ro` | `GEMINI_HOME` |
-| codex | `~/.config/openai/` | `/home/agent/.config/openai/` | `ro` | `CODEX_HOME` |
-| all | `~/.agents/` | `/home/agent/.agents/` | `ro` | `AGENTS_HOME` |
-| all | `~/.hive/state/<agent>/` | `/home/agent/.hive-state/` | `rw` | *(not configurable)* |
+| claude | `~/.claude/` | `/home/agent/.hive-source/claude/` | `/home/agent/.claude/` | `CLAUDE_HOME` |
+| copilot | `~/.copilot/` | `/home/agent/.hive-source/copilot/` | `/home/agent/.copilot/` | `COPILOT_HOME` |
+| gemini | `~/.gemini/` | `/home/agent/.hive-source/gemini/` | `/home/agent/.gemini/` | `GEMINI_HOME` |
+| codex | `~/.config/openai/` | `/home/agent/.hive-source/codex/` | `/home/agent/.config/openai/` | `CODEX_HOME` |
+| all | `~/.agents/` | `/home/agent/.hive-source/agents/` | `/home/agent/.agents/` | `AGENTS_HOME` |
 
 Override keys (`CLAUDE_HOME`, `COPILOT_HOME`, etc.) accept absolute paths or paths starting with `~`. Paths that expose broad credential stores — such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gcloud`, or `~/.kube` — are rejected to prevent accidental host exposure. Use a more specific subdirectory.
 
@@ -262,15 +252,15 @@ mounts:
 | `HIVE_NETWORK` | `hive-net` | Podman bridge network name |
 | `HIVE_REGISTRY` | `ghcr.io/martyfox` | Registry base URL for image pulls |
 | `HIVE_TLS_VERIFY` | *(unset)* | Set to `false` to disable TLS verification for Podman pull/build |
-| `HIVE_AGENT_CONFIG_MODE` | `read-only` | Set to `read-write` or `rw` to mount host agent config read-write; legacy `writable` is accepted |
+| `HIVE_AGENT_CONFIG_MODE` | `read-only` | `ro`/`read-only` projects config from read-only sources into ephemeral homes; `rw`/`read-write` mounts host config directly; legacy `writable` is accepted |
 | `HIVE_GH_TOKEN_MODE` | `off` | Set to `podman-secret` or `env-file` to inject host `gh` token; `true`/`1` map to `env-file` |
 | `HIVE_BEADS` | *(unset)* | Set to `1` to install `bd` in base image and auto-run `bd init` before `--cmd` tasks |
 | `HIVE_BEADS_VERSION` | `1.0.4` | Pinned `@beads/bd` version used when `HIVE_BEADS=1` |
-| `CLAUDE_HOME` | `~/.claude` | Host path mounted as Claude config |
-| `COPILOT_HOME` | `~/.copilot` | Host path mounted as Copilot config |
-| `GEMINI_HOME` | `~/.gemini` | Host path mounted as Gemini config |
-| `CODEX_HOME` | `~/.config/openai` | Host path mounted as Codex config |
-| `AGENTS_HOME` | `~/.agents` | Shared skills/agents directory mounted into all containers |
+| `CLAUDE_HOME` | `~/.claude` | Host path used as Claude config source |
+| `COPILOT_HOME` | `~/.copilot` | Host path used as Copilot config source |
+| `GEMINI_HOME` | `~/.gemini` | Host path used as Gemini config source |
+| `CODEX_HOME` | `~/.config/openai` | Host path used as Codex config source |
+| `AGENTS_HOME` | `~/.agents` | Shared skills/agents source directory for all containers |
 
 ### Example Legacy `~/.hive/config`
 

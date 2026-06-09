@@ -9,4 +9,4 @@ RUN npm install -g @openai/codex@0.130.0
 
 USER agent
 
-ENTRYPOINT ["codex"]
+ENTRYPOINT ["hive-agent-entrypoint", "codex", "codex"]

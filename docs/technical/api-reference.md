@@ -100,7 +100,7 @@ Assembles the full `podman run` argument slice (everything after `podman`, befor
 
 The cleanup function is safe to call multiple times — it uses `sync.Once` internally. Callers must run Podman as a child process (not `syscall.Exec`) when the cleanup function is non-trivial.
 
-Argument order: base flags → config mounts → Hive state mount → agent state env → extra mounts → token → cert. `agent state env` is currently Copilot-only and redirects `COPILOT_HOME` into Hive state when host config is read-only.
+Argument order: base flags → config mounts → extra mounts → token → cert. Read-only config mounts target `/home/agent/.hive-source/...`; read-write config mounts target the live agent homes.
 
 ---
 

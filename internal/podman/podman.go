@@ -284,6 +284,7 @@ type configMount struct {
 	src  string
 	dst  string
 	desc string // shown in startup log
+	key  string
 }
 
 type runtimeMount struct {
@@ -332,7 +333,7 @@ func configMounts(agent string) ([]configMount, error) {
 	}
 	// ~/.agents/ is the shared personal skills/agents directory read by copilot CLI,
 	// claude code, and other agents. Mount for all agents.
-	mounts = append(mounts, configMount{AgentsHome(), "/home/agent/.agents", "shared agent skills"})
+	mounts = append(mounts, configMount{src: AgentsHome(), dst: "/home/agent/.agents", desc: "shared agent skills", key: "agents"})
 	return validateConfigMounts(mounts)
 }
 
@@ -353,16 +354,16 @@ func agentConfigMount(agent string) (configMount, bool) {
 	switch agent {
 	case "claude":
 		src := hiveConfigValDefault("CLAUDE_HOME", paths.Claude, home+"/.claude")
-		return configMount{src, "/home/agent/.claude", "claude config"}, true
+		return configMount{src: src, dst: "/home/agent/.claude", desc: "claude config", key: "claude"}, true
 	case "copilot":
 		src := hiveConfigValDefault("COPILOT_HOME", paths.Copilot, home+"/.copilot")
-		return configMount{src, "/home/agent/.copilot", "copilot config"}, true
+		return configMount{src: src, dst: "/home/agent/.copilot", desc: "copilot config", key: "copilot"}, true
 	case "gemini":
 		src := hiveConfigValDefault("GEMINI_HOME", paths.Gemini, home+"/.gemini")
-		return configMount{src, "/home/agent/.gemini", "gemini config"}, true
+		return configMount{src: src, dst: "/home/agent/.gemini", desc: "gemini config", key: "gemini"}, true
 	case "codex":
 		src := hiveConfigValDefault("CODEX_HOME", paths.Codex, home+"/.config/openai")
-		return configMount{src, "/home/agent/.config/openai", "codex config"}, true
+		return configMount{src: src, dst: "/home/agent/.config/openai", desc: "codex config", key: "codex"}, true
 	default:
 		return configMount{}, false
 	}
@@ -566,10 +567,6 @@ func BuildRunArgs(agent string, opts RunOptions) ([]string, func(), error) {
 	if args, err = appendConfigMountArgs(args, agent, opts); err != nil {
 		return nil, cleanup, err
 	}
-	if args, err = appendStateMountArgs(args, agent); err != nil {
-		return nil, cleanup, err
-	}
-	args = appendAgentStateEnvArgs(args, agent, opts)
 	if args, err = appendExtraMountArgs(args); err != nil {
 		return nil, cleanup, err
 	}
@@ -605,8 +602,9 @@ func appendConfigMountArgs(args []string, agent string, opts RunOptions) ([]stri
 	}
 	for _, m := range configs {
 		if _, err := os.Stat(m.src); err == nil {
-			args = append(args, "-v", m.src+":"+m.dst+":"+mode+",z")
-			fmt.Printf("[hive] %-36s → %s (%s)\n", m.desc, m.dst, mode)
+			dst := configMountDestination(m, mode)
+			args = append(args, "-v", m.src+":"+dst+":"+mode+",z")
+			fmt.Printf("[hive] %-36s → %s (%s)\n", m.desc, dst, mode)
 			continue
 		}
 		fmt.Fprintf(os.Stderr,
@@ -614,6 +612,13 @@ func appendConfigMountArgs(args []string, agent string, opts RunOptions) ([]stri
 			m.desc, m.src, m.src)
 	}
 	return args, nil
+}
+
+func configMountDestination(m configMount, mode string) string {
+	if mode == "rw" {
+		return m.dst
+	}
+	return "/home/agent/.hive-source/" + m.key
 }
 
 func configMountMode(opts RunOptions) string {
@@ -626,17 +631,6 @@ func configMountMode(opts RunOptions) string {
 
 func agentConfigIsWritable(opts RunOptions) bool {
 	return opts.WritableConfig || AgentConfigWritable()
-}
-
-func appendStateMountArgs(args []string, agent string) ([]string, error) {
-	home, _ := os.UserHomeDir()
-	statePath := filepath.Join(home, ".hive", "state", agent)
-	if err := os.MkdirAll(statePath, 0o750); err != nil {
-		return nil, fmt.Errorf("creating hive state directory %s: %w", statePath, err)
-	}
-	args = append(args, "-v", statePath+":/home/agent/.hive-state:rw,z")
-	fmt.Printf("[hive] %-36s → %s (rw)\n", "hive agent state", "/home/agent/.hive-state")
-	return args, nil
 }
 
 func appendAgentStateEnvArgs(args []string, agent string, opts RunOptions) []string {

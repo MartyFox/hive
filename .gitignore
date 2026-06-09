@@ -4,6 +4,7 @@
 # Binary
 hive
 hive-*
+!internal/imgfs/images/base/hive-agent-entrypoint
 
 # Go build artifacts
 *.exe

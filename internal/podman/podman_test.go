@@ -675,11 +675,19 @@ func TestBuildRunArgs_configMountsDefaultReadOnly(t *testing.T) {
 	joined := strings.Join(args, " ")
 
 	for _, want := range []string{
-		filepath.Join(home, ".claude") + ":/home/agent/.claude:ro,z",
-		filepath.Join(home, ".agents") + ":/home/agent/.agents:ro,z",
+		filepath.Join(home, ".claude") + ":/home/agent/.hive-source/claude:ro,z",
+		filepath.Join(home, ".agents") + ":/home/agent/.hive-source/agents:ro,z",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("BuildRunArgs missing read-only config mount %q in %q", want, joined)
+		}
+	}
+	for _, forbidden := range []string{
+		filepath.Join(home, ".claude") + ":/home/agent/.claude:ro,z",
+		filepath.Join(home, ".agents") + ":/home/agent/.agents:ro,z",
+	} {
+		if strings.Contains(joined, forbidden) {
+			t.Errorf("BuildRunArgs should not mount read-only config at live path %q in %q", forbidden, joined)
 		}
 	}
 }
@@ -751,7 +759,7 @@ func TestBuildRunArgs_configPathFromYAML(t *testing.T) {
 	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
 	defer cleanup()
 	joined := strings.Join(args, " ")
-	want := custom + ":/home/agent/.claude:ro,z"
+	want := custom + ":/home/agent/.hive-source/claude:ro,z"
 	if !strings.Contains(joined, want) {
 		t.Errorf("BuildRunArgs missing YAML config mount %q in %q", want, joined)
 	}
@@ -791,7 +799,7 @@ func TestBuildRunArgs_rejectsSensitiveConfigHome(t *testing.T) {
 	}
 }
 
-func TestBuildRunArgs_stateMountReadWrite(t *testing.T) {
+func TestBuildRunArgs_noPersistentStateMountByDefault(t *testing.T) {
 	home := setHome(t)
 
 	args, cleanup := buildRunArgsForTest(t, "claude", RunOptions{})
@@ -799,12 +807,52 @@ func TestBuildRunArgs_stateMountReadWrite(t *testing.T) {
 	joined := strings.Join(args, " ")
 
 	statePath := filepath.Join(home, ".hive", "state", "claude")
-	if _, err := os.Stat(statePath); err != nil {
-		t.Fatalf("state dir should exist: %v", err)
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Fatalf("state dir should not be created by default, stat err=%v", err)
 	}
-	want := statePath + ":/home/agent/.hive-state:rw,z"
-	if !strings.Contains(joined, want) {
-		t.Errorf("BuildRunArgs missing state mount %q in %q", want, joined)
+	for _, forbidden := range []string{statePath, "/home/agent/.hive-state"} {
+		if strings.Contains(joined, forbidden) {
+			t.Errorf("BuildRunArgs should not include persistent state mount %q in %q", forbidden, joined)
+		}
+	}
+}
+
+func TestBuildRunArgs_copilotReadOnlyProjectsConfigWithoutRuntimeHomeRedirect(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".copilot"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{})
+	defer cleanup()
+	joined := strings.Join(args, " ")
+
+	configMount := filepath.Join(home, ".copilot") + ":/home/agent/.hive-source/copilot:ro,z"
+	if !strings.Contains(joined, configMount) {
+		t.Fatalf("BuildRunArgs missing read-only copilot config mount %q in %q", configMount, joined)
+	}
+	if strings.Contains(joined, ":/home/agent/.copilot:ro,z") {
+		t.Fatalf("BuildRunArgs should not mount read-only copilot config at live path; args=%#v", args)
+	}
+	for i, arg := range args {
+		if arg == "-e" && i+1 < len(args) && strings.HasPrefix(args[i+1], "COPILOT_HOME=") {
+			t.Fatalf("BuildRunArgs should not redirect COPILOT_HOME in read-only mode; args=%#v", args)
+		}
+	}
+}
+
+func TestBuildRunArgs_copilotWritableConfigKeepsRuntimeHome(t *testing.T) {
+	home := setHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".copilot"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	args, cleanup := buildRunArgsForTest(t, "copilot", RunOptions{WritableConfig: true})
+	defer cleanup()
+	for i, arg := range args {
+		if arg == "-e" && i+1 < len(args) && strings.HasPrefix(args[i+1], "COPILOT_HOME=") {
+			t.Fatalf("BuildRunArgs should not redirect COPILOT_HOME when config is writable; args=%#v", args)
+		}
 	}
 }
 
