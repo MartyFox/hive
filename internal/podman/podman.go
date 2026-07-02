@@ -19,6 +19,7 @@ const (
 	Prefix          = "hive"
 	defaultRegistry = "ghcr.io/martyfox"
 	defaultBeadsVer = "1.0.4"
+	containerUserNS = "keep-id:uid=1000,gid=1000"
 )
 
 // Network returns the effective Podman network name.
@@ -585,7 +586,10 @@ func baseRunArgs(opts RunOptions) []string {
 	if opts.Interactive {
 		args = append(args, "-it")
 	}
+	// Map the invoking host user onto the image's non-root agent UID/GID so
+	// private config mounts like ~/.claude (0700) stay readable inside rootless Podman.
 	return append(args,
+		"--userns", containerUserNS,
 		"--cap-drop=ALL",
 		"--security-opt", "no-new-privileges",
 		"--network", Network(),
