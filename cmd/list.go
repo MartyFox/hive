@@ -17,7 +17,7 @@ var listCmd = &cobra.Command{
 func runList(_ *cobra.Command, _ []string) error {
 	cmd := exec.Command("podman", "images",
 		"--filter", "reference=hive-*",
-		"--format", "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}",
+		"--format", "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.Created}}",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
