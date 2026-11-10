@@ -330,6 +330,28 @@ Security controls are applied by `hive run`, not baked into the image.
 | Host agent config | Read-only by default; explicit writable mode available |
 | GitHub auth injection | Off by default; temporary Podman secret, env-file fallback |
 
+### Automated security scans
+
+- [Security baseline](.github/workflows/security-baseline.yml) calls the pinned
+  central Trivy workflow in report mode: dependency vulnerabilities, secrets and
+  infrastructure misconfiguration checks. It publishes sanitised counts to the
+  `security-results` branch on trusted default-branch runs.
+- A parallel CodeQL job in the same [baseline workflow](.github/workflows/security-baseline.yml) calls the central reusable
+  CodeQL workflow with `languages: '["go"]'`, running `security-extended` queries
+  on pull requests, pushes to `main`, weekly and
+  manually. Findings appear in GitHub's Security tab. CodeQL can build project
+  code; do not use privileged persistent self-hosted runners for untrusted PRs.
+- The central dashboard collects baseline summaries and open CodeQL alert counts.
+  Its token needs Actions, Contents and Code scanning alerts read access to this
+  repository. No central credentials are stored here.
+
+CodeQL and standard hosted runner execution are free while this repository is
+public; larger runners and artifact/cache storage can still incur charges.
+These scans report findings, not proof of security or an automatic merge-blocking
+policy. Disable CodeQL default setup if using this advanced workflow.
+The CodeQL call is pinned to a published central commit. Other repositories can
+pass their own language arrays without adding a separate consumer workflow.
+
 ## Workspace
 
 `$PWD` is bind-mounted read-write at `/workspace`. Agents edit real project files directly. Hive-managed state persists under `~/.hive/state/<agent>/`.

@@ -16,9 +16,19 @@ jobs:
     uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@22aa90e3d52c5657cb2db2ca8e3e2d41a99a2c83
     with:
       mode: report
+      scanners: vuln,secret,misconfig
       runner: ${{ vars.SECURITY_RUNNER || '["ubuntu-24.04"]' }}
       results-storage: ${{ vars.SECURITY_RESULTS_STORAGE || 'branch' }}
       cache-db: ${{ vars.SECURITY_CACHE_DB == 'true' }}
+
+  codeql:
+    permissions:
+      contents: read
+      security-events: write
+    uses: MartyFox/central-dashboard/.github/workflows/codeql.yml@81c0eca8ec4e7b902a85f54288bcf33b204f0d49
+    with:
+      languages: '["go"]'
+      runner: ${{ vars.SECURITY_RUNNER || '["ubuntu-24.04"]' }}
 
   publish:
     needs: security-baseline
