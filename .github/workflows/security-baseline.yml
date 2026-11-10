@@ -13,8 +13,7 @@ permissions:
 
 jobs:
   security-baseline:
-    # Publish central changes first, then pin main to the resulting commit SHA.
-    uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@main
+    uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@2b5cb14a5969f9c82ad17c917c7f9db5d8a36dc4
     with:
       mode: report
       scanners: vuln,secret,misconfig
