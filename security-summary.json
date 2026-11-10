@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "repository": "MartyFox/hive",
   "branch": "main",
-  "sourceSha": "430309dc200576ce00c57449b14ff54f9f7ed715",
-  "runId": 42826443327,
+  "sourceSha": "f45575431628046f299568cd1167e5e2b40eea86",
+  "runId": 42828626206,
   "runAttempt": 1,
   "scanResult": "success",
   "scanOutcome": "completed",
-  "publishedAt": "2026-11-10T13:39:19.915Z",
+  "publishedAt": "2026-11-10T13:54:45.807Z",
   "summary": {
-    "scannedAt": "2026-11-10T13:39:11.821Z",
+    "scannedAt": "2026-11-10T13:53:18.532Z",
     "counts": {
       "vulnerabilities": {
         "CRITICAL": 0,
