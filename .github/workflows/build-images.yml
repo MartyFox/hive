@@ -3,6 +3,8 @@ name: Build and push hive images
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
