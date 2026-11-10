@@ -332,10 +332,14 @@ Security controls are applied by `hive run`, not baked into the image.
 
 ### Automated security scans
 
-- [Security baseline](.github/workflows/security-baseline.yml) calls the pinned
+- [Security baseline](.github/workflows/security-baseline.yml) calls the
   central Trivy workflow in report mode: dependency vulnerabilities, secrets and
   infrastructure misconfiguration checks. It publishes sanitised counts to the
   `security-results` branch on trusted default-branch runs.
+  Comprehensive detection and inclusion of supported development dependencies are
+  enabled. The same Trivy configuration works across supported languages; package
+  lockfiles/manifests must be present. Go standard-library version inference is not
+  a substitute for scanning the actual release binary.
 - A CodeQL job following Trivy in the same [baseline workflow](.github/workflows/security-baseline.yml) calls the central reusable
   CodeQL workflow with `languages: '["go"]'`, running `security-extended` queries
   on pull requests, pushes to `main`, weekly and
@@ -354,6 +358,8 @@ CodeQL and standard hosted runner execution are free while this repository is
 public; larger runners and artifact/cache storage can still incur charges.
 These scans report findings, not proof of security or an automatic merge-blocking
 policy. Disable CodeQL default setup if using this advanced workflow.
+Publish the updated central Trivy workflow before this caller's new inputs.
+Its temporary `@main` Trivy reference must then be pinned to the published commit SHA.
 The CodeQL call is pinned to a published central commit. Other repositories can
 pass their own language arrays without adding a separate consumer workflow.
 

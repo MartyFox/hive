@@ -13,10 +13,13 @@ permissions:
 
 jobs:
   security-baseline:
-    uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@22aa90e3d52c5657cb2db2ca8e3e2d41a99a2c83
+    # Publish central changes first, then pin main to the resulting commit SHA.
+    uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@main
     with:
       mode: report
       scanners: vuln,secret,misconfig
+      detection-priority: comprehensive
+      include-dev-deps: true
       runner: ${{ vars.SECURITY_RUNNER || '["ubuntu-24.04"]' }}
       results-storage: ${{ vars.SECURITY_RESULTS_STORAGE || 'branch' }}
       cache-db: ${{ vars.SECURITY_CACHE_DB == 'true' }}
