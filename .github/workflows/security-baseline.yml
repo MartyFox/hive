@@ -1,0 +1,37 @@
+name: Security baseline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-baseline:
+    uses: MartyFox/central-dashboard/.github/workflows/security-baseline.yml@22aa90e3d52c5657cb2db2ca8e3e2d41a99a2c83
+    with:
+      mode: report
+      runner: ${{ vars.SECURITY_RUNNER || '["ubuntu-24.04"]' }}
+      results-storage: ${{ vars.SECURITY_RESULTS_STORAGE || 'branch' }}
+      cache-db: ${{ vars.SECURITY_CACHE_DB == 'true' }}
+
+  publish:
+    needs: security-baseline
+    if: >-
+      always() && (vars.SECURITY_RESULTS_STORAGE || 'branch') == 'branch' &&
+      contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    permissions:
+      contents: write
+    uses: MartyFox/central-dashboard/.github/workflows/publish-results.yml@22aa90e3d52c5657cb2db2ca8e3e2d41a99a2c83
+    with:
+      runner: ${{ vars.SECURITY_RUNNER || '["ubuntu-24.04"]' }}
+      summary: ${{ needs.security-baseline.outputs.summary }}
+      scan-result: ${{ needs.security-baseline.result }}
+      results-branch: ${{ vars.SECURITY_RESULTS_BRANCH || 'security-results' }}
+      results-path: ${{ vars.SECURITY_RESULTS_PATH || 'security-summary.json' }}
