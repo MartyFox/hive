@@ -336,7 +336,7 @@ Security controls are applied by `hive run`, not baked into the image.
   central Trivy workflow in report mode: dependency vulnerabilities, secrets and
   infrastructure misconfiguration checks. It publishes sanitised counts to the
   `security-results` branch on trusted default-branch runs.
-- A parallel CodeQL job in the same [baseline workflow](.github/workflows/security-baseline.yml) calls the central reusable
+- A CodeQL job following Trivy in the same [baseline workflow](.github/workflows/security-baseline.yml) calls the central reusable
   CodeQL workflow with `languages: '["go"]'`, running `security-extended` queries
   on pull requests, pushes to `main`, weekly and
   manually. Findings appear in GitHub's Security tab. CodeQL can build project
@@ -344,6 +344,11 @@ Security controls are applied by `hive run`, not baked into the image.
 - The central dashboard collects baseline summaries and open CodeQL alert counts.
   Its token needs Actions, Contents and Code scanning alerts read access to this
   repository. No central credentials are stored here.
+
+Job order is Trivy, then CodeQL, then the final Trivy summary publisher. CodeQL
+still runs after a Trivy failure unless cancelled. The publisher waits for both
+scanners and records available Trivy results even on failure; CodeQL uploads its
+own results to GitHub code scanning. The dashboard checks overall workflow health.
 
 CodeQL and standard hosted runner execution are free while this repository is
 public; larger runners and artifact/cache storage can still incur charges.
