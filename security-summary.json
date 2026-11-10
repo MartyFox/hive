@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "repository": "MartyFox/hive",
   "branch": "main",
-  "sourceSha": "f45575431628046f299568cd1167e5e2b40eea86",
-  "runId": 42828626206,
+  "sourceSha": "10165ce1f9ea7d3666b7d4aa77bb0e92a00997e8",
+  "runId": 42848081900,
   "runAttempt": 1,
   "scanResult": "success",
   "scanOutcome": "completed",
-  "publishedAt": "2026-11-10T13:54:45.807Z",
+  "publishedAt": "2026-11-10T15:49:33.670Z",
   "summary": {
-    "scannedAt": "2026-11-10T13:53:18.532Z",
+    "scannedAt": "2026-11-10T15:48:09.522Z",
     "counts": {
       "vulnerabilities": {
-        "CRITICAL": 0,
-        "HIGH": 0,
-        "MEDIUM": 0,
-        "LOW": 0,
+        "CRITICAL": 2,
+        "HIGH": 31,
+        "MEDIUM": 52,
+        "LOW": 4,
         "UNKNOWN": 0
       },
       "secrets": {
@@ -34,7 +34,7 @@
       }
     },
     "detectedTargets": 6,
-    "blockingCount": 1,
+    "blockingCount": 34,
     "scanners": [
       "vuln",
       "secret",
