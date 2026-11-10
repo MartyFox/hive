@@ -31,6 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     python3 \
     python3-pip \
+    build-essential \
+    procps \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # ── GitHub CLI (gh) ─────────────────────────────────────────────────────────
@@ -63,5 +66,12 @@ RUN groupmod -n agent node \
     && usermod -l agent -d /home/agent -m -s /bin/zsh node \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
+
+# ── Homebrew (Linuxbrew) ──────────────────────────────────────────────────────
+# Brew refuses to install/run as root, so it's installed as 'agent'.
+RUN mkdir -p /home/linuxbrew/.linuxbrew \
+    && chown -R agent:agent /home/linuxbrew \
+    && su - agent -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 
 WORKDIR /workspace
